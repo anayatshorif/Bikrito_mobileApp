@@ -231,6 +231,7 @@ class _BikritoAppState extends State<BikritoApp> {
           : HomeScreen(
               profile: _profile!,
               products: _products,
+              sales: _sales,
               bangla: _bangla,
               t: t,
               onLanguage: () => setState(() => _bangla = !_bangla),
@@ -924,6 +925,7 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.profile,
     required this.products,
+    required this.sales,
     required this.bangla,
     required this.t,
     required this.onLanguage,
@@ -936,6 +938,7 @@ class HomeScreen extends StatelessWidget {
   });
   final ShopProfile profile;
   final List<ShopProduct> products;
+  final List<SaleRecord> sales;
   final bool bangla;
   final String Function(String, String) t;
   final VoidCallback onLanguage, onAdd, onEditProfile, onLogout;
@@ -944,6 +947,19 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final todaySales = sales
+        .where(
+          (sale) =>
+              sale.createdAt.year == now.year &&
+              sale.createdAt.month == now.month &&
+              sale.createdAt.day == now.day,
+        )
+        .fold<double>(0, (sum, sale) => sum + sale.total);
+    final allSales = sales.fold<double>(0, (sum, sale) => sum + sale.total);
+    final remainingSales = sales
+        .where((sale) => sale.paymentMethod == 'remaining')
+        .fold<double>(0, (sum, sale) => sum + sale.total);
     return Scaffold(
       drawer: Drawer(
         backgroundColor: Colors.white,
@@ -1017,16 +1033,6 @@ class HomeScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(context);
                   onEditProfile();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.language_rounded, color: _ink),
-                title: Text(t('Language', 'ভাষা')),
-                subtitle: Text(bangla ? 'বাংলা' : 'English'),
-                trailing: const Icon(Icons.swap_horiz_rounded),
-                onTap: () {
-                  Navigator.pop(context);
-                  onLanguage();
                 },
               ),
               const Spacer(),
@@ -1120,6 +1126,18 @@ class HomeScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      TextButton(
+                        onPressed: onLanguage,
+                        style: TextButton.styleFrom(
+                          foregroundColor: _red,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(40, 40),
+                        ),
+                        child: Text(
+                          bangla ? 'EN' : 'বাংলা',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
                       Builder(
                         builder: (context) => IconButton.filledTonal(
                           onPressed: () => Scaffold.of(context).openDrawer(),
@@ -1181,9 +1199,9 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: _StatTile(
-                              label: t('Products', 'পণ্য'),
-                              value: '${products.length}',
-                              icon: Icons.inventory_2_outlined,
+                              label: t('Today sales', 'আজকের বিক্রি'),
+                              value: '৳${_money(todaySales)}',
+                              icon: Icons.trending_up_rounded,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1193,6 +1211,78 @@ class HomeScreen extends StatelessWidget {
                               value: t('Offline', 'অফলাইন'),
                               icon: Icons.wifi_off_rounded,
                             ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+              sliver: SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(19),
+                    border: Border.all(color: const Color(0xFFECEAE7)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              t('Business overview', 'ব্যবসার সারসংক্ষেপ'),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: _ink,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${sales.length} ${t('sales', 'টি বিক্রি')}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _muted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 13),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 9,
+                        crossAxisSpacing: 9,
+                        childAspectRatio: 2.35,
+                        children: [
+                          _OverviewMetric(
+                            label: t('All-time sales', 'সর্বমোট বিক্রি'),
+                            value: '৳${_money(allSales)}',
+                            icon: Icons.payments_outlined,
+                          ),
+                          _OverviewMetric(
+                            label: t('Remaining', 'বাকি'),
+                            value: '৳${_money(remainingSales)}',
+                            icon: Icons.hourglass_bottom_rounded,
+                            highlight: true,
+                          ),
+                          _OverviewMetric(
+                            label: t('Products', 'পণ্য'),
+                            value: '${products.length}',
+                            icon: Icons.inventory_2_outlined,
+                          ),
+                          _OverviewMetric(
+                            label: t('Recorded sales', 'সংরক্ষিত বিক্রি'),
+                            value: '${sales.length}',
+                            icon: Icons.receipt_long_outlined,
                           ),
                         ],
                       ),
@@ -1402,6 +1492,102 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
               ),
+            if (sales.isNotEmpty) ...[
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(22, 26, 22, 12),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t('Recent sales', 'সাম্প্রতিক বিক্রি'),
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: onReports,
+                        child: Text(t('View all', 'সব দেখুন')),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+                sliver: SliverList.separated(
+                  itemCount: sales.length < 3 ? sales.length : 3,
+                  separatorBuilder: (_, __) => const SizedBox(height: 9),
+                  itemBuilder: (context, index) {
+                    final sale = sales[index];
+                    final itemCount = sale.items.fold<int>(
+                      0,
+                      (sum, item) => sum + item.quantity,
+                    );
+                    return Container(
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFECEAE7)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFEEEE),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.receipt_long_rounded,
+                              color: _red,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${t('Sale', 'বিক্রি')} #${sale.id ?? ''}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_homePaymentLabel(sale.paymentMethod, t)} · $itemCount ${t('items', 'টি পণ্য')}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: _muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '৳${_money(sale.total)}',
+                            style: const TextStyle(
+                              color: _red,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 28),
               sliver: SliverToBoxAdapter(
@@ -1419,15 +1605,14 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      floatingActionButton: products.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: onAdd,
-              backgroundColor: _red,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(t('Add product', 'পণ্য যোগ করুন')),
-            )
-          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: onNewSale,
+        backgroundColor: _red,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.point_of_sale_rounded),
+        label: Text(t('New sale', 'নতুন বিক্রি')),
+      ),
     );
   }
 }
@@ -1682,6 +1867,60 @@ class _FieldLabel extends StatelessWidget {
   );
 }
 
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.highlight = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: highlight ? const Color(0xFFFFEEEE) : _canvas,
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 17, color: _red),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10, color: _muted),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _StatTile extends StatelessWidget {
   const _StatTile({
     required this.label,
@@ -1761,3 +2000,12 @@ class _ProductImage extends StatelessWidget {
 String _money(double price) => price == price.roundToDouble()
     ? price.toStringAsFixed(0)
     : price.toStringAsFixed(2);
+
+String _homePaymentLabel(String method, String Function(String, String) t) =>
+    switch (method) {
+      'bkash' => 'bKash',
+      'nagad' => 'Nagad',
+      'bank' => t('Bank', 'ব্যাংক'),
+      'remaining' => t('Remaining', 'বাকি'),
+      _ => t('Cash', 'নগদ'),
+    };

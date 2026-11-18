@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/sale_record.dart';
 import '../models/shop_product.dart';
+import '../widgets/bikrito_bottom_navigation.dart';
 
 const _saleRed = Color(0xFFD83B3B);
 const _saleInk = Color(0xFF252525);
@@ -15,12 +16,14 @@ class SalesScreen extends StatefulWidget {
     required this.bangla,
     required this.t,
     required this.onSave,
+    required this.onNavigate,
   });
 
   final List<ShopProduct> products;
   final bool bangla;
   final String Function(String, String) t;
   final Future<void> Function(SaleRecord) onSave;
+  final ValueChanged<int> onNavigate;
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
@@ -68,6 +71,43 @@ class _SalesScreenState extends State<SalesScreen> {
       } else {
         _quantities[id] = next;
       }
+    });
+  }
+
+  Future<void> _startAnotherSale() async {
+    final hasDraft =
+        _selectedProducts.isNotEmpty ||
+        _discountController.text.trim().isNotEmpty;
+    if (hasDraft) {
+      final clearDraft = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(t('Start a new sale?', 'নতুন বিক্রি শুরু করবেন?')),
+          content: Text(
+            t(
+              'This will clear the current sale draft.',
+              'এতে বর্তমান বিক্রির খসড়াটি মুছে যাবে।',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(t('Keep editing', 'সম্পাদনা চালিয়ে যান')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: FilledButton.styleFrom(backgroundColor: _saleRed),
+              child: Text(t('Clear sale', 'বিক্রি মুছুন')),
+            ),
+          ],
+        ),
+      );
+      if (clearDraft != true || !mounted) return;
+    }
+    setState(() {
+      _quantities.clear();
+      _discountController.clear();
+      _paymentMethod = 'cash';
     });
   }
 
@@ -121,6 +161,16 @@ class _SalesScreenState extends State<SalesScreen> {
           t('New sale', 'নতুন বিক্রি'),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
+      ),
+      bottomNavigationBar: BikritoBottomBar(
+        selectedIndex: -1,
+        t: t,
+        onNavigate: widget.onNavigate,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: BikritoSaleButton(
+        t: t,
+        onPressed: _startAnotherSale,
       ),
       body: SafeArea(
         child: widget.products.isEmpty
@@ -517,10 +567,14 @@ class SalesReportsScreen extends StatelessWidget {
     required this.sales,
     required this.bangla,
     required this.t,
+    required this.onNavigate,
+    required this.onNewSale,
   });
   final List<SaleRecord> sales;
   final bool bangla;
   final String Function(String, String) t;
+  final ValueChanged<int> onNavigate;
+  final VoidCallback onNewSale;
 
   @override
   Widget build(BuildContext context) {
@@ -535,6 +589,13 @@ class SalesReportsScreen extends StatelessWidget {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
       ),
+      bottomNavigationBar: BikritoBottomBar(
+        selectedIndex: 2,
+        t: t,
+        onNavigate: onNavigate,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: BikritoSaleButton(t: t, onPressed: onNewSale),
       body: sales.isEmpty
           ? Center(
               child: Column(

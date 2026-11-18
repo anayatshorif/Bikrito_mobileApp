@@ -13,7 +13,9 @@ import 'database/bikrito_database.dart';
 import 'models/sale_record.dart';
 import 'models/shop_profile.dart';
 import 'models/shop_product.dart';
+import 'screens/products_screen.dart';
 import 'screens/sales_screen.dart';
+import 'widgets/bikrito_bottom_navigation.dart';
 
 const _red = Color(0xFFD83B3B);
 const _ink = Color(0xFF252525);
@@ -31,6 +33,7 @@ class BikritoApp extends StatefulWidget {
 
 class _BikritoAppState extends State<BikritoApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  final _homeKey = GlobalKey<_HomeScreenState>();
   ShopProfile? _profile;
   List<ShopProduct> _products = [];
   List<SaleRecord> _sales = [];
@@ -123,6 +126,17 @@ class _BikritoAppState extends State<BikritoApp> {
       );
   }
 
+  Future<void> _deleteProductById(int id) async {
+    await BikritoDatabase.instance.deleteProduct(id);
+    await _refreshProducts();
+  }
+
+  Future<List<ShopProduct>> _refreshProducts() async {
+    final products = await BikritoDatabase.instance.getProducts();
+    if (mounted) setState(() => _products = products);
+    return products;
+  }
+
   Future<void> _recordSale(SaleRecord sale) async {
     final id = await BikritoDatabase.instance.createSale(sale);
     if (mounted) setState(() => _sales = [sale.withId(id), ..._sales]);
@@ -136,6 +150,7 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
+          onNavigate: _handleBottomNavigation,
         ),
       ),
     );
@@ -144,10 +159,56 @@ class _BikritoAppState extends State<BikritoApp> {
   Future<void> _openReportsPage() async {
     await _navigatorKey.currentState!.push<void>(
       MaterialPageRoute(
-        builder: (_) =>
-            SalesReportsScreen(sales: _sales, bangla: _bangla, t: t),
+        builder: (_) => SalesReportsScreen(
+          sales: _sales,
+          bangla: _bangla,
+          t: t,
+          onNavigate: _handleBottomNavigation,
+          onNewSale: _openSalePage,
+        ),
       ),
     );
+  }
+
+  Future<void> _openProductsPage() async {
+    await _navigatorKey.currentState!.push<void>(
+      MaterialPageRoute(
+        builder: (_) => ProductsScreen(
+          products: _products,
+          t: t,
+          onNavigate: _handleBottomNavigation,
+          onNewSale: _openSalePage,
+          onAdd: _openProductForm,
+          onDelete: _deleteProductById,
+          onRefresh: _refreshProducts,
+        ),
+      ),
+    );
+  }
+
+  void _handleBottomNavigation(int index) {
+    final navigator = _navigatorKey.currentState!;
+    _homeKey.currentState?.setSelectedTab(index);
+    switch (index) {
+      case 0:
+        navigator.popUntil((route) => route.isFirst);
+        _homeKey.currentState?.scrollToTop();
+        break;
+      case 1:
+        navigator.popUntil((route) => route.isFirst);
+        _openProductsPage();
+        break;
+      case 2:
+        navigator.popUntil((route) => route.isFirst);
+        _openReportsPage();
+        break;
+      case 3:
+        navigator.popUntil((route) => route.isFirst);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _homeKey.currentState?.openDrawer();
+        });
+        break;
+    }
   }
 
   @override
@@ -229,6 +290,7 @@ class _BikritoAppState extends State<BikritoApp> {
               },
             )
           : HomeScreen(
+              key: _homeKey,
               profile: _profile!,
               products: _products,
               sales: _sales,
@@ -241,6 +303,7 @@ class _BikritoAppState extends State<BikritoApp> {
               onLogout: () => setState(() => _authenticated = false),
               onNewSale: _openSalePage,
               onReports: _openReportsPage,
+              onNavigate: _handleBottomNavigation,
             ),
     );
   }
@@ -248,7 +311,12 @@ class _BikritoAppState extends State<BikritoApp> {
   Future<void> _openProductForm() async {
     final product = await _navigatorKey.currentState!.push<ShopProduct>(
       MaterialPageRoute(
-        builder: (_) => ProductFormScreen(bangla: _bangla, t: t),
+        builder: (_) => ProductFormScreen(
+          bangla: _bangla,
+          t: t,
+          onNavigate: _handleBottomNavigation,
+          onNewSale: _openSalePage,
+        ),
       ),
     );
     if (product != null) await _addProduct(product);
@@ -920,7 +988,7 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     required this.profile,
@@ -935,6 +1003,7 @@ class HomeScreen extends StatelessWidget {
     required this.onLogout,
     required this.onNewSale,
     required this.onReports,
+    required this.onNavigate,
   });
   final ShopProfile profile;
   final List<ShopProduct> products;
@@ -943,10 +1012,62 @@ class HomeScreen extends StatelessWidget {
   final String Function(String, String) t;
   final VoidCallback onLanguage, onAdd, onEditProfile, onLogout;
   final VoidCallback onNewSale, onReports;
+  final ValueChanged<int> onNavigate;
   final ValueChanged<int> onDelete;
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final _scrollController = ScrollController();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  int _selectedTab = 0;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _selectTab(int index) {
+    setState(() => _selectedTab = index);
+    widget.onNavigate(index);
+  }
+
+  void scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void setSelectedTab(int index) {
+    if (mounted) setState(() => _selectedTab = index);
+  }
+
+  void openDrawer() {
+    setSelectedTab(3);
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final profile = widget.profile;
+    final products = widget.products;
+    final sales = widget.sales;
+    final bangla = widget.bangla;
+    final t = widget.t;
+    final onLanguage = widget.onLanguage;
+    final onAdd = widget.onAdd;
+    final onDelete = widget.onDelete;
+    final onEditProfile = widget.onEditProfile;
+    final onLogout = widget.onLogout;
+    final onNewSale = widget.onNewSale;
+    final onReports = widget.onReports;
     final now = DateTime.now();
     final todaySales = sales
         .where(
@@ -961,6 +1082,7 @@ class HomeScreen extends StatelessWidget {
         .where((sale) => sale.paymentMethod == 'remaining')
         .fold<double>(0, (sum, sale) => sum + sale.total);
     return Scaffold(
+      key: _scaffoldKey,
       drawer: Drawer(
         backgroundColor: Colors.white,
         child: SafeArea(
@@ -1061,6 +1183,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(22, 15, 22, 0),
@@ -1605,22 +1728,29 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: onNewSale,
-        backgroundColor: _red,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.point_of_sale_rounded),
-        label: Text(t('New sale', 'নতুন বিক্রি')),
+      bottomNavigationBar: BikritoBottomBar(
+        selectedIndex: _selectedTab,
+        t: t,
+        onNavigate: _selectTab,
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: BikritoSaleButton(t: t, onPressed: onNewSale),
     );
   }
 }
 
 class ProductFormScreen extends StatefulWidget {
-  const ProductFormScreen({super.key, required this.bangla, required this.t});
+  const ProductFormScreen({
+    super.key,
+    required this.bangla,
+    required this.t,
+    required this.onNavigate,
+    required this.onNewSale,
+  });
   final bool bangla;
   final String Function(String, String) t;
+  final ValueChanged<int> onNavigate;
+  final VoidCallback onNewSale;
   @override
   State<ProductFormScreen> createState() => _ProductFormScreenState();
 }
@@ -1688,6 +1818,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
         centerTitle: false,
+      ),
+      bottomNavigationBar: BikritoBottomBar(
+        selectedIndex: 1,
+        t: t,
+        onNavigate: widget.onNavigate,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: BikritoSaleButton(
+        t: t,
+        onPressed: widget.onNewSale,
       ),
       body: SafeArea(
         child: Form(

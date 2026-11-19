@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -38,6 +41,8 @@ class _SalesScreenState extends State<SalesScreen> {
   final _discountController = TextEditingController();
   final _buyerNameController = TextEditingController();
   final _buyerPhoneController = TextEditingController();
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
   final Map<int, int> _quantities = {};
   String _paymentMethod = 'cash';
   bool _saving = false;
@@ -53,6 +58,14 @@ class _SalesScreenState extends State<SalesScreen> {
   int _quantity(ShopProduct product) =>
       product.id == null ? 0 : (_quantities[product.id] ?? 0);
 
+  List<ShopProduct> get _filteredProducts {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return widget.products;
+    return widget.products
+        .where((p) => p.name.toLowerCase().contains(query))
+        .toList();
+  }
+
   double get _subtotal => _selectedProducts.fold<double>(
     0,
     (sum, product) => sum + product.price * _quantity(product),
@@ -67,6 +80,7 @@ class _SalesScreenState extends State<SalesScreen> {
     _discountController.dispose();
     _buyerNameController.dispose();
     _buyerPhoneController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -188,136 +202,233 @@ class _SalesScreenState extends State<SalesScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                       children: [
-                        _SectionTitle(
-                          title: t('Select products', 'পণ্য নির্বাচন করুন'),
-                          subtitle: t(
-                            'Tap + to add items to this sale.',
-                            'বিক্রিতে পণ্য যোগ করতে + চাপুন।',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...widget.products.map(_productTile),
-                        const SizedBox(height: 22),
-                        _SectionTitle(
-                          title: t('Buyer details', 'ক্রেতার তথ্য'),
-                          subtitle: t(
-                            'Optional — shown on the WhatsApp bill.',
-                            'ঐচ্ছিক — হোয়াটসঅ্যাপ বিলে দেখানো হবে।',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _buyerNameController,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            hintText: t('Buyer name', 'ক্রেতার নাম'),
-                            prefixIcon: const Icon(Icons.person_outline_rounded),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFECEAE7),
+                        _card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _SectionTitle(
+                                title: t('Select products', 'পণ্য নির্বাচন করুন'),
+                                subtitle: t(
+                                  'Search and tap + to add.',
+                                  'খুঁজুন এবং + চাপুন।',
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _buyerPhoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            hintText: t(
-                              'Buyer WhatsApp number (optional)',
-                              'ক্রেতার হোয়াটসঅ্যাপ নম্বর (ঐচ্ছিক)',
-                            ),
-                            prefixIcon: const Icon(Icons.chat_outlined),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFECEAE7),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _searchController,
+                                onChanged: (value) =>
+                                    setState(() => _searchQuery = value),
+                                decoration: InputDecoration(
+                                  hintText: t(
+                                    'Search products…',
+                                    'পণ্য খুঁজুন…',
+                                  ),
+                                  prefixIcon: const Icon(Icons.search_rounded),
+                                  filled: true,
+                                  fillColor: const Color(0xFFFAF9F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(13),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFECEAE7),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 8),
+                              if (_filteredProducts.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  child: Text(
+                                    t(
+                                      'No matching products',
+                                      'কোনো পণ্য পাওয়া যায়নি',
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: _saleMuted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ..._filteredProducts.map(_productTile),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 22),
-                        _SectionTitle(
-                          title: t('Discount', 'ছাড়'),
-                          subtitle: t(
-                            'Enter a fixed amount in taka.',
-                            'টাকায় ছাড়ের পরিমাণ লিখুন।',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _discountController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d{0,2}'),
+                        const SizedBox(height: 16),
+                        if (_selectedProducts.isNotEmpty) ...[
+                          _card(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      t('Sale items', 'বিক্রির পণ্য'),
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: _saleInk,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${_selectedProducts.length} ${t('items', 'টি পণ্য')}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: _saleMuted,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                ..._selectedProducts.map(_saleItemTile),
+                              ],
                             ),
-                          ],
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            prefixText: '৳  ',
-                            hintText: '0',
-                            errorText: invalidDiscount
-                                ? t(
-                                    'Discount can’t exceed subtotal',
-                                    'ছাড় উপমোটের বেশি হতে পারে না',
-                                  )
-                                : null,
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFECEAE7),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        _card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _SectionTitle(
+                                title: t('Buyer details', 'ক্রেতার তথ্য'),
+                                subtitle: t(
+                                  'Optional — used on the invoice.',
+                                  'ঐচ্ছিক — ইনভয়েসে ব্যবহার হবে।',
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _buyerNameController,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: InputDecoration(
+                                  hintText: t('Buyer name', 'ক্রেতার নাম'),
+                                  prefixIcon: const Icon(
+                                    Icons.person_outline_rounded,
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xFFFAF9F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(13),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFECEAE7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _buyerPhoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  hintText: t(
+                                    'Buyer WhatsApp number (optional)',
+                                    'ক্রেতার হোয়াটসঅ্যাপ নম্বর (ঐচ্ছিক)',
+                                  ),
+                                  prefixIcon: const Icon(Icons.chat_outlined),
+                                  filled: true,
+                                  fillColor: const Color(0xFFFAF9F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(13),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFECEAE7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 22),
-                        _SectionTitle(
-                          title: t('Payment method', 'পেমেন্ট পদ্ধতি'),
+                        const SizedBox(height: 16),
+                        _card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _SectionTitle(
+                                title: t('Payment method', 'পেমেন্ট পদ্ধতি'),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _paymentChip(
+                                    'cash',
+                                    t('Cash', 'নগদ'),
+                                    Icons.payments_outlined,
+                                  ),
+                                  _paymentChip(
+                                    'bkash',
+                                    'bKash',
+                                    Icons.account_balance_wallet_outlined,
+                                  ),
+                                  _paymentChip(
+                                    'nagad',
+                                    'Nagad',
+                                    Icons.account_balance_wallet_outlined,
+                                  ),
+                                  _paymentChip(
+                                    'bank',
+                                    t('Bank', 'ব্যাংক'),
+                                    Icons.account_balance_outlined,
+                                  ),
+                                  _paymentChip(
+                                    'remaining',
+                                    t('Remaining', 'বাকি'),
+                                    Icons.hourglass_bottom_rounded,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _SectionTitle(
+                                title: t('Discount', 'ছাড়'),
+                                subtitle: t(
+                                  'Enter a fixed amount in taka.',
+                                  'টাকায় ছাড়ের পরিমাণ লিখুন।',
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _discountController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d{0,2}'),
+                                  ),
+                                ],
+                                onChanged: (_) => setState(() {}),
+                                decoration: InputDecoration(
+                                  prefixText: '৳  ',
+                                  hintText: '0',
+                                  errorText: invalidDiscount
+                                      ? t(
+                                          'Discount can’t exceed subtotal',
+                                          'ছাড় উপমোটের বেশি হতে পারে না',
+                                        )
+                                      : null,
+                                  filled: true,
+                                  fillColor: const Color(0xFFFAF9F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(13),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFECEAE7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _paymentChip(
-                              'cash',
-                              t('Cash', 'নগদ'),
-                              Icons.payments_outlined,
-                            ),
-                            _paymentChip(
-                              'bkash',
-                              'bKash',
-                              Icons.account_balance_wallet_outlined,
-                            ),
-                            _paymentChip(
-                              'nagad',
-                              'Nagad',
-                              Icons.account_balance_wallet_outlined,
-                            ),
-                            _paymentChip(
-                              'bank',
-                              t('Bank', 'ব্যাংক'),
-                              Icons.account_balance_outlined,
-                            ),
-                            _paymentChip(
-                              'remaining',
-                              t('Remaining', 'বাকি'),
-                              Icons.hourglass_bottom_rounded,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 16),
                         _totalsCard(),
                       ],
                     ),
@@ -373,31 +484,107 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
+  Widget _card({required Widget child}) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFECEAE7)),
+    ),
+    child: child,
+  );
+
+  Widget _thumb(ShopProduct product, {double size = 42}) {
+    Widget child;
+    if (product.imageData != null && product.imageData!.isNotEmpty) {
+      child = Image.memory(base64Decode(product.imageData!), fit: BoxFit.cover);
+    } else if (product.imagePath != null && product.imagePath!.isNotEmpty) {
+      child = Image.file(File(product.imagePath!), fit: BoxFit.cover);
+    } else {
+      child = const Center(
+        child: Icon(Icons.inventory_2_outlined, color: _saleRed, size: 20),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: size,
+        height: size,
+        color: const Color(0xFFFFEEEE),
+        child: child,
+      ),
+    );
+  }
+
   Widget _productTile(ShopProduct product) {
-    final quantity = _quantity(product);
+    final qty = _quantity(product);
     return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFECEAE7)),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF3F1EF))),
       ),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEEEE),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.inventory_2_outlined,
-              color: _saleRed,
-              size: 21,
+          _thumb(product),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _saleInk,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '৳${_formatMoney(product.price)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _saleRed,
+                  ),
+                ),
+              ],
             ),
           ),
+          InkWell(
+            onTap: () => _changeQuantity(product, 1),
+            borderRadius: BorderRadius.circular(9),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: qty > 0 ? const Color(0xFFFFEEEE) : _saleRed,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(
+                qty > 0 ? Icons.check_rounded : Icons.add_rounded,
+                size: 18,
+                color: qty > 0 ? _saleRed : Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _saleItemTile(ShopProduct product) {
+    final qty = _quantity(product);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF3F1EF))),
+      ),
+      child: Row(
+        children: [
+          _thumb(product, size: 38),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -408,45 +595,109 @@ class _SalesScreenState extends State<SalesScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: _saleInk,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  '৳${_formatMoney(product.price)}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: _saleRed,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  '৳${_formatMoney(product.price)} ${t('each', 'প্রতি')}',
+                  style: const TextStyle(fontSize: 12, color: _saleMuted),
                 ),
               ],
             ),
           ),
-          IconButton(
-            onPressed: quantity == 0
-                ? null
-                : () => _changeQuantity(product, -1),
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.remove_circle_outline_rounded),
+          _miniStep(
+            '−',
+            onTap: () => _changeQuantity(product, -1),
+            radius: const BorderRadius.horizontal(left: Radius.circular(9)),
           ),
-          SizedBox(
-            width: 22,
+          Container(
+            width: 34,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border.symmetric(
+                vertical: BorderSide(color: Color(0xFFECEAE7)),
+              ),
+            ),
             child: Text(
-              '$quantity',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              '$qty',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: _saleInk,
+              ),
             ),
           ),
-          IconButton(
-            onPressed: () => _changeQuantity(product, 1),
-            visualDensity: VisualDensity.compact,
-            color: _saleRed,
-            icon: const Icon(Icons.add_circle_rounded),
+          _miniStep(
+            '+',
+            onTap: () => _changeQuantity(product, 1),
+            radius: const BorderRadius.horizontal(right: Radius.circular(9)),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 58,
+            child: Text(
+              '৳${_formatMoney(product.price * qty)}',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: _saleRed,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: () => _changeQuantity(product, -qty),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEEEE),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: _saleRed,
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _miniStep(
+    String label, {
+    required VoidCallback onTap,
+    BorderRadius? radius,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFECEAE7)),
+          borderRadius: radius,
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: _saleRed,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

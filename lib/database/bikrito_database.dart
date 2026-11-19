@@ -20,7 +20,7 @@ class BikritoDatabase {
     _database = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 6,
         onCreate: (db, version) async {
           await db.execute('''
           CREATE TABLE shop_profile (
@@ -30,7 +30,9 @@ class BikritoDatabase {
             pin_hash TEXT NOT NULL DEFAULT '',
             owner TEXT NOT NULL,
             shop TEXT NOT NULL,
-            phone TEXT NOT NULL
+            phone TEXT NOT NULL,
+            logo_path TEXT,
+            logo_data TEXT
           )
           ''');
           await db.execute('''
@@ -56,11 +58,29 @@ class BikritoDatabase {
               "ALTER TABLE shop_profile ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''",
             );
           }
+          if (oldVersion < 6) {
+            await db.execute(
+              'ALTER TABLE shop_profile ADD COLUMN logo_path TEXT',
+            );
+            await db.execute(
+              'ALTER TABLE shop_profile ADD COLUMN logo_data TEXT',
+            );
+          }
           if (oldVersion < 3) {
             await db.execute('ALTER TABLE products ADD COLUMN image_data TEXT');
           }
           if (oldVersion < 4) {
             await _ensureSalesTables(db);
+          }
+          // Sales tables are created fresh for versions before 4, so buyer
+          // columns are only missing when upgrading straight from version 4.
+          if (oldVersion == 4) {
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN buyer_name TEXT NOT NULL DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN buyer_phone TEXT NOT NULL DEFAULT ''",
+            );
           }
         },
       ),
@@ -108,6 +128,8 @@ class BikritoDatabase {
         'total': sale.total,
         'payment_method': sale.paymentMethod,
         'created_at': sale.createdAt.millisecondsSinceEpoch,
+        'buyer_name': sale.buyerName,
+        'buyer_phone': sale.buyerPhone,
       });
       for (final item in sale.items) {
         await txn.insert('sale_items', {
@@ -155,6 +177,8 @@ class BikritoDatabase {
           createdAt: DateTime.fromMillisecondsSinceEpoch(
             sale['created_at'] as int,
           ),
+          buyerName: sale['buyer_name'] as String? ?? '',
+          buyerPhone: sale['buyer_phone'] as String? ?? '',
         ),
       );
     }
@@ -170,7 +194,9 @@ Future<void> _ensureSalesTables(DatabaseExecutor db) async {
       discount REAL NOT NULL DEFAULT 0,
       total REAL NOT NULL,
       payment_method TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      buyer_name TEXT NOT NULL DEFAULT '',
+      buyer_phone TEXT NOT NULL DEFAULT ''
     )
   ''');
   await db.execute('''

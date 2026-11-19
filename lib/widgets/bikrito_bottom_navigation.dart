@@ -9,11 +9,13 @@ class BikritoBottomBar extends StatelessWidget {
     required this.selectedIndex,
     required this.t,
     required this.onNavigate,
+    this.showSaleButton = true,
   });
 
   final int selectedIndex;
   final String Function(String, String) t;
   final ValueChanged<int> onNavigate;
+  final bool showSaleButton;
 
   @override
   Widget build(BuildContext context) => BottomAppBar(
@@ -21,7 +23,7 @@ class BikritoBottomBar extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 8),
     color: Colors.white,
     elevation: 10,
-    shape: const CircularNotchedRectangle(),
+    shape: showSaleButton ? const CircularNotchedRectangle() : null,
     notchMargin: 7,
     child: Row(
       children: [
@@ -41,7 +43,7 @@ class BikritoBottomBar extends StatelessWidget {
             onTap: () => onNavigate(1),
           ),
         ),
-        const SizedBox(width: 66),
+        if (showSaleButton) const SizedBox(width: 66),
         Expanded(
           child: _NavItem(
             icon: Icons.receipt_long_rounded,

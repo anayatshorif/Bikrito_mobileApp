@@ -23,6 +23,8 @@ class SaleRecord {
     required this.total,
     required this.paymentMethod,
     required this.createdAt,
+    this.buyerName = '',
+    this.buyerPhone = '',
   });
 
   final int? id;
@@ -32,6 +34,8 @@ class SaleRecord {
   final double total;
   final String paymentMethod;
   final DateTime createdAt;
+  final String buyerName;
+  final String buyerPhone;
 
   SaleRecord withId(int saleId) => SaleRecord(
     id: saleId,
@@ -41,5 +45,7 @@ class SaleRecord {
     total: total,
     paymentMethod: paymentMethod,
     createdAt: createdAt,
+    buyerName: buyerName,
+    buyerPhone: buyerPhone,
   );
 }

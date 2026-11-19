@@ -1,4 +1,4 @@
--- Bikrito local SQLite database schema (database version 4).
+-- Bikrito local SQLite database schema (database version 6).
 -- The app creates this database on the device as bikrito.db.
 
 CREATE TABLE shop_profile (
@@ -8,7 +8,9 @@ CREATE TABLE shop_profile (
   pin_hash TEXT NOT NULL DEFAULT '',
   owner TEXT NOT NULL,
   shop TEXT NOT NULL,
-  phone TEXT NOT NULL
+  phone TEXT NOT NULL,
+  logo_path TEXT,
+  logo_data TEXT
 );
 
 CREATE TABLE products (
@@ -25,7 +27,9 @@ CREATE TABLE sales (
   discount REAL NOT NULL DEFAULT 0,
   total REAL NOT NULL,
   payment_method TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  buyer_name TEXT NOT NULL DEFAULT '',
+  buyer_phone TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE sale_items (

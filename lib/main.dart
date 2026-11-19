@@ -16,6 +16,7 @@ import 'models/shop_product.dart';
 import 'screens/products_screen.dart';
 import 'screens/sales_screen.dart';
 import 'widgets/bikrito_bottom_navigation.dart';
+import 'widgets/bikrito_logo.dart';
 
 const _red = Color(0xFFD83B3B);
 const _ink = Color(0xFF252525);
@@ -137,9 +138,11 @@ class _BikritoAppState extends State<BikritoApp> {
     return products;
   }
 
-  Future<void> _recordSale(SaleRecord sale) async {
+  Future<SaleRecord> _recordSale(SaleRecord sale) async {
     final id = await BikritoDatabase.instance.createSale(sale);
-    if (mounted) setState(() => _sales = [sale.withId(id), ..._sales]);
+    final saved = sale.withId(id);
+    if (mounted) setState(() => _sales = [saved, ..._sales]);
+    return saved;
   }
 
   Future<void> _openSalePage() async {
@@ -147,6 +150,7 @@ class _BikritoAppState extends State<BikritoApp> {
       MaterialPageRoute(
         builder: (_) => SalesScreen(
           products: _products,
+          profile: _profile!,
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
@@ -161,6 +165,7 @@ class _BikritoAppState extends State<BikritoApp> {
       MaterialPageRoute(
         builder: (_) => SalesReportsScreen(
           sales: _sales,
+          profile: _profile!,
           bangla: _bangla,
           t: t,
           onNavigate: _handleBottomNavigation,
@@ -490,19 +495,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: _red,
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: const Icon(
-                              Icons.storefront_rounded,
-                              color: Colors.white,
-                              size: 26,
-                            ),
-                          ),
+                          BikritoLogo(size: 48, borderRadius: 15),
                           const SizedBox(width: 12),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -668,6 +661,8 @@ class _SetupScreenState extends State<SetupScreen> {
   late final _owner = TextEditingController(text: widget.initial?.owner ?? '');
   late final _shop = TextEditingController(text: widget.initial?.shop ?? '');
   late final _phone = TextEditingController(text: widget.initial?.phone ?? '');
+  late String? _logoPath = widget.initial?.logoPath;
+  late String? _logoData = widget.initial?.logoData;
 
   @override
   void dispose() {
@@ -678,6 +673,56 @@ class _SetupScreenState extends State<SetupScreen> {
     _shop.dispose();
     _phone.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+      if (image == null) return;
+      if (kIsWeb) {
+        final encoded = base64Encode(await image.readAsBytes());
+        if (mounted) setState(() => _logoData = encoded);
+        return;
+      }
+      final documents = await getApplicationDocumentsDirectory();
+      final logoDirectory = Directory(p.join(documents.path, 'shop_logo'));
+      await logoDirectory.create(recursive: true);
+      final destination = p.join(
+        logoDirectory.path,
+        '${DateTime.now().microsecondsSinceEpoch}${p.extension(image.path)}',
+      );
+      final saved = await File(image.path).copy(destination);
+      if (mounted) setState(() => _logoPath = saved.path);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.t(
+              'Could not add logo. Please try again.',
+              'লোগো যোগ করা যায়নি। আবার চেষ্টা করুন।',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _logoPreview() {
+    if (_logoData != null && _logoData!.isNotEmpty) {
+      return Image.memory(base64Decode(_logoData!), fit: BoxFit.cover);
+    }
+    if (_logoPath != null && _logoPath!.isNotEmpty) {
+      return Image.file(File(_logoPath!), fit: BoxFit.cover);
+    }
+    return const ColoredBox(
+      color: Color(0xFFFFEEEE),
+      child: Icon(Icons.storefront_rounded, color: _red, size: 36),
+    );
   }
 
   @override
@@ -730,19 +775,7 @@ class _SetupScreenState extends State<SetupScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: _red,
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: const Icon(
-                              Icons.storefront_rounded,
-                              color: Colors.white,
-                              size: 26,
-                            ),
-                          ),
+                          BikritoLogo(size: 48, borderRadius: 15),
                           const SizedBox(width: 12),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,7 +823,32 @@ class _SetupScreenState extends State<SetupScreen> {
                         ),
                         style: const TextStyle(fontSize: 15, color: _muted),
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 26),
+                      Center(
+                        child: GestureDetector(
+                          onTap: _pickLogo,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              width: 96,
+                              height: 96,
+                              color: Colors.white,
+                              child: _logoPreview(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Text(
+                          t(
+                            'Add shop logo (optional)',
+                            'দোকানের লোগো যোগ করুন (ঐচ্ছিক)',
+                          ),
+                          style: const TextStyle(fontSize: 12, color: _muted),
+                        ),
+                      ),
+                      const SizedBox(height: 26),
                       _FieldLabel(t('Email address', 'ইমেইল ঠিকানা')),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -932,6 +990,8 @@ class _SetupScreenState extends State<SetupScreen> {
                               owner: _owner.text.trim(),
                               shop: _shop.text.trim(),
                               phone: _phone.text.trim(),
+                              logoPath: _logoPath,
+                              logoData: _logoData,
                             );
                             if (widget.initial == null ||
                                 widget.requiredSetup) {
@@ -1095,18 +1155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.storefront_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
+                    BikritoLogo(size: 46, borderRadius: 14),
                     const SizedBox(height: 18),
                     Text(
                       profile.shop,
@@ -1128,6 +1177,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 10),
+              ListTile(
+                leading: const Icon(Icons.home_rounded, color: _ink),
+                title: Text(
+                  t('Home', 'হোম'),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onNavigate(0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined, color: _ink),
+                title: Text(
+                  t('Products', 'পণ্য'),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onNavigate(1);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.point_of_sale_rounded, color: _red),
                 title: Text(
@@ -1207,19 +1278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: _red,
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Icon(
-                          Icons.storefront_rounded,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ),
+                      BikritoLogo(size: 40, borderRadius: 13),
                       const SizedBox(width: 9),
                       Expanded(
                         child: Column(

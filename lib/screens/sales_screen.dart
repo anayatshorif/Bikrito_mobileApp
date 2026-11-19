@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../bills/whatsapp_bill.dart';
+import '../bills/invoice_actions.dart';
 import '../models/sale_record.dart';
 import '../models/shop_product.dart';
+import '../models/shop_profile.dart';
 import '../widgets/bikrito_bottom_navigation.dart';
 
 const _saleRed = Color(0xFFD83B3B);
@@ -13,6 +16,7 @@ class SalesScreen extends StatefulWidget {
   const SalesScreen({
     super.key,
     required this.products,
+    required this.profile,
     required this.bangla,
     required this.t,
     required this.onSave,
@@ -20,9 +24,10 @@ class SalesScreen extends StatefulWidget {
   });
 
   final List<ShopProduct> products;
+  final ShopProfile profile;
   final bool bangla;
   final String Function(String, String) t;
-  final Future<void> Function(SaleRecord) onSave;
+  final Future<SaleRecord> Function(SaleRecord) onSave;
   final ValueChanged<int> onNavigate;
 
   @override
@@ -31,6 +36,8 @@ class SalesScreen extends StatefulWidget {
 
 class _SalesScreenState extends State<SalesScreen> {
   final _discountController = TextEditingController();
+  final _buyerNameController = TextEditingController();
+  final _buyerPhoneController = TextEditingController();
   final Map<int, int> _quantities = {};
   String _paymentMethod = 'cash';
   bool _saving = false;
@@ -58,6 +65,8 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   void dispose() {
     _discountController.dispose();
+    _buyerNameController.dispose();
+    _buyerPhoneController.dispose();
     super.dispose();
   }
 
@@ -74,43 +83,6 @@ class _SalesScreenState extends State<SalesScreen> {
     });
   }
 
-  Future<void> _startAnotherSale() async {
-    final hasDraft =
-        _selectedProducts.isNotEmpty ||
-        _discountController.text.trim().isNotEmpty;
-    if (hasDraft) {
-      final clearDraft = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(t('Start a new sale?', 'নতুন বিক্রি শুরু করবেন?')),
-          content: Text(
-            t(
-              'This will clear the current sale draft.',
-              'এতে বর্তমান বিক্রির খসড়াটি মুছে যাবে।',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(t('Keep editing', 'সম্পাদনা চালিয়ে যান')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(backgroundColor: _saleRed),
-              child: Text(t('Clear sale', 'বিক্রি মুছুন')),
-            ),
-          ],
-        ),
-      );
-      if (clearDraft != true || !mounted) return;
-    }
-    setState(() {
-      _quantities.clear();
-      _discountController.clear();
-      _paymentMethod = 'cash';
-    });
-  }
-
   Future<void> _saveSale() async {
     if (_selectedProducts.isEmpty || _discount > _subtotal || _saving) return;
     setState(() => _saving = true);
@@ -124,16 +96,24 @@ class _SalesScreenState extends State<SalesScreen> {
           ),
         )
         .toList();
+    final sale = SaleRecord(
+      items: items,
+      subtotal: _subtotal,
+      discount: _discount,
+      total: _total,
+      paymentMethod: _paymentMethod,
+      createdAt: DateTime.now(),
+      buyerName: _buyerNameController.text.trim(),
+      buyerPhone: normaliseBdPhone(_buyerPhoneController.text),
+    );
     try {
-      await widget.onSave(
-        SaleRecord(
-          items: items,
-          subtotal: _subtotal,
-          discount: _discount,
-          total: _total,
-          paymentMethod: _paymentMethod,
-          createdAt: DateTime.now(),
-        ),
+      final savedSale = await widget.onSave(sale);
+      if (!mounted) return;
+      await showInvoicePreview(
+        context: context,
+        profile: widget.profile,
+        sale: savedSale,
+        t: t,
       );
       if (!mounted) return;
       Navigator.pop(context);
@@ -166,11 +146,7 @@ class _SalesScreenState extends State<SalesScreen> {
         selectedIndex: -1,
         t: t,
         onNavigate: widget.onNavigate,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: BikritoSaleButton(
-        t: t,
-        onPressed: _startAnotherSale,
+        showSaleButton: false,
       ),
       body: SafeArea(
         child: widget.products.isEmpty
@@ -221,6 +197,51 @@ class _SalesScreenState extends State<SalesScreen> {
                         ),
                         const SizedBox(height: 12),
                         ...widget.products.map(_productTile),
+                        const SizedBox(height: 22),
+                        _SectionTitle(
+                          title: t('Buyer details', 'ক্রেতার তথ্য'),
+                          subtitle: t(
+                            'Optional — shown on the WhatsApp bill.',
+                            'ঐচ্ছিক — হোয়াটসঅ্যাপ বিলে দেখানো হবে।',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _buyerNameController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            hintText: t('Buyer name', 'ক্রেতার নাম'),
+                            prefixIcon: const Icon(Icons.person_outline_rounded),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFECEAE7),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _buyerPhoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            hintText: t(
+                              'Buyer WhatsApp number (optional)',
+                              'ক্রেতার হোয়াটসঅ্যাপ নম্বর (ঐচ্ছিক)',
+                            ),
+                            prefixIcon: const Icon(Icons.chat_outlined),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFECEAE7),
+                              ),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 22),
                         _SectionTitle(
                           title: t('Discount', 'ছাড়'),
@@ -565,12 +586,14 @@ class SalesReportsScreen extends StatelessWidget {
   const SalesReportsScreen({
     super.key,
     required this.sales,
+    required this.profile,
     required this.bangla,
     required this.t,
     required this.onNavigate,
     required this.onNewSale,
   });
   final List<SaleRecord> sales;
+  final ShopProfile profile;
   final bool bangla;
   final String Function(String, String) t;
   final ValueChanged<int> onNavigate;
@@ -669,13 +692,13 @@ class SalesReportsScreen extends StatelessWidget {
   }
 
   Widget _saleCard(BuildContext context, SaleRecord sale) {
-    final method = _paymentName(sale.paymentMethod, t);
+    final method = paymentLabel(sale.paymentMethod, t);
     return InkWell(
       onTap: () => showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
-        builder: (_) => _SaleDetails(sale: sale, t: t),
+        builder: (_) => _SaleDetails(sale: sale, t: t, profile: profile),
       ),
       borderRadius: BorderRadius.circular(17),
       child: Container(
@@ -748,9 +771,10 @@ class SalesReportsScreen extends StatelessWidget {
 }
 
 class _SaleDetails extends StatelessWidget {
-  const _SaleDetails({required this.sale, required this.t});
+  const _SaleDetails({required this.sale, required this.t, required this.profile});
   final SaleRecord sale;
   final String Function(String, String) t;
+  final ShopProfile profile;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -809,8 +833,31 @@ class _SaleDetails extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '${t('Payment', 'পেমেন্ট')}: ${_paymentName(sale.paymentMethod, t)}',
+            '${t('Payment', 'পেমেন্ট')}: ${paymentLabel(sale.paymentMethod, t)}',
             style: const TextStyle(color: _saleMuted, fontSize: 13),
+          ),
+          if (sale.buyerName.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${t('Buyer', 'ক্রেতা')}: ${sale.buyerName}',
+              style: const TextStyle(color: _saleMuted, fontSize: 13),
+            ),
+          ],
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: () => showInvoicePreview(
+                context: context,
+                profile: profile,
+                sale: sale,
+                t: t,
+              ),
+              icon: const Icon(Icons.receipt_long_rounded),
+              label: Text(t('Invoice', 'ইনভয়েস')),
+              style: FilledButton.styleFrom(backgroundColor: _saleRed),
+            ),
           ),
         ],
       ),
@@ -859,15 +906,6 @@ class _SummaryCard extends StatelessWidget {
     ),
   );
 }
-
-String _paymentName(String method, String Function(String, String) t) =>
-    switch (method) {
-      'bkash' => 'bKash',
-      'nagad' => 'Nagad',
-      'bank' => t('Bank', 'ব্যাংক'),
-      'remaining' => t('Remaining', 'বাকি'),
-      _ => t('Cash', 'নগদ'),
-    };
 
 String _saleDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}  ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';

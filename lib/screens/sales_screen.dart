@@ -46,6 +46,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final Map<int, int> _quantities = {};
   String _paymentMethod = 'cash';
   bool _saving = false;
+  bool _showAllProducts = false;
 
   String t(String en, String bn) => widget.t(en, bn);
 
@@ -65,6 +66,10 @@ class _SalesScreenState extends State<SalesScreen> {
         .where((p) => p.name.toLowerCase().contains(query))
         .toList();
   }
+
+  List<ShopProduct> get _visibleProducts => _showAllProducts
+      ? _filteredProducts
+      : _filteredProducts.take(2).toList();
 
   double get _subtotal => _selectedProducts.fold<double>(
     0,
@@ -252,8 +257,11 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                   ),
                                 )
-                              else
-                                ..._filteredProducts.map(_productTile),
+                              else ...[
+                                ..._visibleProducts.map(_productTile),
+                                if (!_showAllProducts && _filteredProducts.length > 2)
+                                  _seeAllButton(),
+                              ],
                             ],
                           ),
                         ),
@@ -515,6 +523,36 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
   }
+
+  Widget _seeAllButton() => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: InkWell(
+      onTap: () => setState(() => _showAllProducts = true),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFEEEE),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              t('See all', 'সব দেখুন'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _saleRed,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: _saleRed, size: 18),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget _productTile(ShopProduct product) {
     final qty = _quantity(product);

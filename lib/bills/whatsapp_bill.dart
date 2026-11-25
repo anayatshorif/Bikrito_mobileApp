@@ -35,34 +35,34 @@ String buildBillText({
   required String Function(String, String) t,
   bool showBranding = true,
 }) {
-  final lines = <String>[
-    profile.shop.trim().isEmpty ? 'Bikrito' : profile.shop.trim(),
-  ];
+  final lines = <String>[];
+  lines.add(' *${profile.shop.trim().isEmpty ? 'Bikrito' : profile.shop.trim()}*');
   final ownerLine = [profile.owner.trim(), profile.phone.trim()]
       .where((part) => part.isNotEmpty)
       .join('  ·  ');
   if (ownerLine.isNotEmpty) lines.add(ownerLine);
   lines.add('');
-  lines.add('${t('Bill', 'বিল')} #${sale.id ?? ''}');
-  lines.add(_billDate(sale.createdAt));
-  lines.add('--------------------------');
+  lines.add('📄 *${t('Bill', 'বিল')} #${sale.id ?? ''}*');
+  lines.add(' ${_billDate(sale.createdAt)}');
+  lines.add('━━━━━━━━━━━━━━━');
   for (final item in sale.items) {
-    lines.add('${item.name}  x${item.quantity}  ৳${_money(item.lineTotal)}');
+    lines.add('▪️ ${item.name}  ×${item.quantity}  —  ৳${_money(item.lineTotal)}');
   }
-  lines.add('--------------------------');
+  lines.add('━━━━━━━━━━━━━━━');
   lines.add('${t('Subtotal', 'উপমোট')}: ৳${_money(sale.subtotal)}');
   if (sale.discount > 0) {
     lines.add('${t('Discount', 'ছাড়')}: -৳${_money(sale.discount)}');
   }
-  lines.add('${t('Total', 'মোট')}: ৳${_money(sale.total)}');
+  lines.add('💰 *${t('Total', 'মোট')}: ৳${_money(sale.total)}*');
   lines.add('');
-  lines.add('${t('Payment', 'পেমেন্ট')}: ${paymentLabel(sale.paymentMethod, t)}');
+  lines.add('💳 ${t('Payment', 'পেমেন্ট')}: ${paymentLabel(sale.paymentMethod, t)}');
   if (sale.buyerName.trim().isNotEmpty) {
-    lines.add('${t('Buyer', 'ক্রেতা')}: ${sale.buyerName.trim()}');
+    lines.add('👤 ${t('Buyer', 'ক্রেতা')}: ${sale.buyerName.trim()}');
   }
   lines.add('');
+  lines.add(t('Thank you for shopping!', 'কেনাকাটা করার জন্য ধন্যবাদ!'));
   if (showBranding) {
-    lines.add(t('Bill by Bikrito', 'বিক্রিতো দিয়ে বিল'));
+    lines.add('_${t('Bill by Bikrito', 'বিক্রিতো দিয়ে বিল')}_');
   }
   return lines.join('\n');
 }

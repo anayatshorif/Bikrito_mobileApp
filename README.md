@@ -9,7 +9,11 @@ Bikrito is an offline-first Flutter app for small shops and online sellers. Shop
 - Local product catalog with optional photos
 - Sales with quantities, fixed taka discounts, and cash, bKash, Nagad, bank, or remaining payment methods
 - COD orders with repeat-customer autofill and one-tap courier detail copying
+<<<<<<< HEAD
 - Local sales reports with itemized sale details, editable saved sales, a remaining-payments list, and Bangla WhatsApp due reminders and payment thank-you messages
+=======
+- Local sales reports with itemized sale details and editable saved sales
+>>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
 - Android, Windows, and web builds
 
 ## Run on Android

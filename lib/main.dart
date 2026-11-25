@@ -171,6 +171,7 @@ class _BikritoAppState extends State<BikritoApp> {
     return sale;
   }
 
+<<<<<<< HEAD
   Future<SaleRecord> _settleRemainingSaleInCash(SaleRecord sale) async {
     if (sale.paymentMethod != 'remaining') {
       throw StateError('Only remaining sales can be settled this way');
@@ -194,6 +195,8 @@ class _BikritoAppState extends State<BikritoApp> {
     );
   }
 
+=======
+>>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   Future<void> _openSalePage() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     await _navigatorKey.currentState!.push<void>(
@@ -264,6 +267,7 @@ class _BikritoAppState extends State<BikritoApp> {
           onNavigate: _handleBottomNavigation,
           onNewSale: _openSalePage,
           onEditSale: _openEditSalePage,
+<<<<<<< HEAD
         ),
       ),
     );
@@ -279,6 +283,8 @@ class _BikritoAppState extends State<BikritoApp> {
           onNavigate: _handleBottomNavigation,
           onEditSale: _openEditSalePage,
           onSettleSale: _settleRemainingSaleInCash,
+=======
+>>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
         ),
       ),
     );

@@ -23,7 +23,9 @@ class SalesScreen extends StatefulWidget {
     required this.bangla,
     required this.t,
     required this.onSave,
+    required this.onUpdate,
     required this.onNavigate,
+    this.initialSale,
     this.saleCounts = const {},
   });
 
@@ -32,7 +34,9 @@ class SalesScreen extends StatefulWidget {
   final bool bangla;
   final String Function(String, String) t;
   final Future<SaleRecord> Function(SaleRecord) onSave;
+  final Future<SaleRecord> Function(SaleRecord) onUpdate;
   final ValueChanged<int> onNavigate;
+  final SaleRecord? initialSale;
   final Map<int, int> saleCounts;
 
   @override
@@ -43,9 +47,15 @@ class _SalesScreenState extends State<SalesScreen> {
   final _discountController = TextEditingController();
   final _buyerNameController = TextEditingController();
   final _buyerPhoneController = TextEditingController();
+  final _buyerAddressController = TextEditingController();
+  final _deliveryController = TextEditingController();
+  final _advanceController = TextEditingController();
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final Map<int, int> _quantities = {};
+  final Map<int, double> _editUnitPrices = {};
+  final Map<int, String> _editProductNames = {};
+  final List<SaleItem> _archivedItems = [];
   String _paymentMethod = 'cash';
   bool _saving = false;
   bool _showAllProducts = false;
@@ -63,45 +73,90 @@ class _SalesScreenState extends State<SalesScreen> {
 
   List<ShopProduct> get _sortedProducts {
     final counts = widget.saleCounts;
-    return List<ShopProduct>.from(widget.products)
-      ..sort((a, b) {
-        final aCount = a.id == null ? 0 : (counts[a.id] ?? 0);
-        final bCount = b.id == null ? 0 : (counts[b.id] ?? 0);
-        if (aCount != bCount) return bCount.compareTo(aCount);
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
+    return List<ShopProduct>.from(widget.products)..sort((a, b) {
+      final aCount = a.id == null ? 0 : (counts[a.id] ?? 0);
+      final bCount = b.id == null ? 0 : (counts[b.id] ?? 0);
+      if (aCount != bCount) return bCount.compareTo(aCount);
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
   }
 
   List<ShopProduct> get _filteredProducts {
     final query = _searchQuery.trim().toLowerCase();
     final sorted = _sortedProducts;
     if (query.isEmpty) return sorted;
-    return sorted
-        .where((p) => p.name.toLowerCase().contains(query))
-        .toList();
+    return sorted.where((p) => p.name.toLowerCase().contains(query)).toList();
   }
 
-  List<ShopProduct> get _visibleProducts => _showAllProducts
-      ? _filteredProducts
-      : _filteredProducts.take(4).toList();
+  List<ShopProduct> get _visibleProducts =>
+      _showAllProducts ? _filteredProducts : _filteredProducts.take(4).toList();
 
   double get _subtotal => _selectedProducts.fold<double>(
-    0,
-    (sum, product) => sum + product.price * _quantity(product),
+    _archivedItems.fold<double>(0, (sum, item) => sum + item.lineTotal),
+    (sum, product) => sum + _unitPrice(product) * _quantity(product),
   );
 
   double get _discount => double.tryParse(_discountController.text.trim()) ?? 0;
-  double get _total =>
-      (_subtotal - _discount).clamp(0, double.infinity).toDouble();
+  double get _deliveryCharge =>
+      double.tryParse(_deliveryController.text.trim()) ?? 0;
+  double get _advancePaid =>
+      double.tryParse(_advanceController.text.trim()) ?? 0;
+  double get _total => (_subtotal + _deliveryCharge - _discount)
+      .clamp(0, double.infinity)
+      .toDouble();
+  double get _codDue =>
+      (_total - _advancePaid).clamp(0, double.infinity).toDouble();
+  bool get _hasSelectedItems =>
+      _selectedProducts.isNotEmpty || _archivedItems.isNotEmpty;
+  bool get _isEditing => widget.initialSale != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final sale = widget.initialSale;
+    if (sale == null) return;
+
+    _discountController.text = sale.discount.toString();
+    _buyerNameController.text = sale.buyerName;
+    _buyerPhoneController.text = sale.buyerPhone;
+    _buyerAddressController.text = sale.buyerAddress;
+    _deliveryController.text = sale.deliveryCharge.toString();
+    _advanceController.text = sale.advancePaid.toString();
+    _paymentMethod = sale.paymentMethod;
+
+    final productsById = {
+      for (final product in widget.products)
+        if (product.id != null) product.id!: product,
+    };
+    for (final item in sale.items) {
+      final productId = item.productId;
+      if (productId != null && productsById.containsKey(productId)) {
+        _quantities[productId] = item.quantity;
+        _editUnitPrices[productId] = item.unitPrice;
+        _editProductNames[productId] = item.name;
+      } else {
+        _archivedItems.add(item);
+      }
+    }
+  }
 
   @override
   void dispose() {
     _discountController.dispose();
     _buyerNameController.dispose();
     _buyerPhoneController.dispose();
+    _buyerAddressController.dispose();
+    _deliveryController.dispose();
+    _advanceController.dispose();
     _searchController.dispose();
     super.dispose();
   }
+
+  double _unitPrice(ShopProduct product) =>
+      _editUnitPrices[product.id] ?? product.price;
+
+  String _itemName(ShopProduct product) =>
+      _editProductNames[product.id] ?? product.name;
 
   void _changeQuantity(ShopProduct product, int amount) {
     final id = product.id;
@@ -110,38 +165,74 @@ class _SalesScreenState extends State<SalesScreen> {
     setState(() {
       if (next <= 0) {
         _quantities.remove(id);
+        _editUnitPrices.remove(id);
+        _editProductNames.remove(id);
       } else {
         _quantities[id] = next;
       }
     });
   }
 
+  void _changeArchivedQuantity(int index, int amount) {
+    setState(() {
+      final item = _archivedItems[index];
+      final quantity = item.quantity + amount;
+      if (quantity <= 0) {
+        _archivedItems.removeAt(index);
+      } else {
+        _archivedItems[index] = SaleItem(
+          productId: item.productId,
+          name: item.name,
+          unitPrice: item.unitPrice,
+          quantity: quantity,
+        );
+      }
+    });
+  }
+
   Future<void> _saveSale() async {
-    if (_selectedProducts.isEmpty || _discount > _subtotal || _saving) return;
+    if (!_hasSelectedItems ||
+        _discount > _subtotal ||
+        (_paymentMethod == 'cod' && _advancePaid > _total) ||
+        _saving) {
+      return;
+    }
     setState(() => _saving = true);
-    final items = _selectedProducts
-        .map(
-          (product) => SaleItem(
-            productId: product.id,
-            name: product.name,
-            unitPrice: product.price,
-            quantity: _quantity(product),
-          ),
-        )
-        .toList();
+    final items = [
+      ..._selectedProducts.map(
+        (product) => SaleItem(
+          productId: product.id,
+          name: _itemName(product),
+          unitPrice: _unitPrice(product),
+          quantity: _quantity(product),
+        ),
+      ),
+      ..._archivedItems,
+    ];
     final sale = SaleRecord(
+      id: widget.initialSale?.id,
       items: items,
       subtotal: _subtotal,
       discount: _discount,
       total: _total,
       paymentMethod: _paymentMethod,
-      createdAt: DateTime.now(),
+      createdAt: widget.initialSale?.createdAt ?? DateTime.now(),
       buyerName: _buyerNameController.text.trim(),
       buyerPhone: normaliseBdPhone(_buyerPhoneController.text),
+      buyerAddress: _buyerAddressController.text.trim(),
+      deliveryCharge: _deliveryCharge,
+      advancePaid: _advancePaid,
+      codDue: _paymentMethod == 'cod' ? _codDue : 0,
     );
     try {
-      final savedSale = await widget.onSave(sale);
+      final savedSale = _isEditing
+          ? await widget.onUpdate(sale)
+          : await widget.onSave(sale);
       if (!mounted) return;
+      if (_isEditing) {
+        Navigator.pop(context, savedSale);
+        return;
+      }
       await showInvoicePreview(
         context: context,
         profile: widget.profile,
@@ -157,7 +248,7 @@ class _SalesScreenState extends State<SalesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${t('Could not save sale', 'বিক্রি সংরক্ষণ হয়নি')}: $error',
+            '${_isEditing ? t('Could not update sale', 'বিক্রি হালনাগাদ হয়নি') : t('Could not save sale', 'বিক্রি সংরক্ষণ হয়নি')}: $error',
           ),
         ),
       );
@@ -168,10 +259,13 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget build(BuildContext context) {
     final t = widget.t;
     final invalidDiscount = _discount > _subtotal;
+    final invalidAdvance = _paymentMethod == 'cod' && _advancePaid > _total;
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          t('New sale', 'নতুন বিক্রি'),
+          _isEditing
+              ? t('Edit sale', 'বিক্রি সম্পাদনা')
+              : t('New sale', 'নতুন বিক্রি'),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
       ),
@@ -182,7 +276,7 @@ class _SalesScreenState extends State<SalesScreen> {
         showSaleButton: false,
       ),
       body: SafeArea(
-        child: widget.products.isEmpty
+        child: widget.products.isEmpty && !_isEditing
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(28),
@@ -256,14 +350,15 @@ class _SalesScreenState extends State<SalesScreen> {
                                 )
                               else ...[
                                 ..._visibleProducts.map(_productTile),
-                                if (!_showAllProducts && _filteredProducts.length > 4)
+                                if (!_showAllProducts &&
+                                    _filteredProducts.length > 4)
                                   _seeAllButton(),
                               ],
                             ],
                           ),
                         ),
                         const SizedBox(height: 16),
-                        if (_selectedProducts.isNotEmpty) ...[
+                        if (_hasSelectedItems) ...[
                           _card(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -281,7 +376,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                       ),
                                     ),
                                     Text(
-                                      '${_selectedProducts.length} ${t('items', 'টি পণ্য')}',
+                                      '${_selectedProducts.length + _archivedItems.length} ${t('items', 'টি পণ্য')}',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: _saleMuted,
@@ -292,6 +387,12 @@ class _SalesScreenState extends State<SalesScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 ..._selectedProducts.map(_saleItemTile),
+                                ..._archivedItems.asMap().entries.map(
+                                  (entry) => _archivedSaleItemTile(
+                                    entry.key,
+                                    entry.value,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -310,6 +411,7 @@ class _SalesScreenState extends State<SalesScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextField(
+                                key: const ValueKey('sale-buyer-name'),
                                 controller: _buyerNameController,
                                 textCapitalization: TextCapitalization.words,
                                 decoration: InputDecoration(
@@ -329,6 +431,7 @@ class _SalesScreenState extends State<SalesScreen> {
                               ),
                               const SizedBox(height: 10),
                               TextField(
+                                key: const ValueKey('sale-buyer-phone'),
                                 controller: _buyerPhoneController,
                                 keyboardType: TextInputType.phone,
                                 decoration: InputDecoration(
@@ -347,6 +450,114 @@ class _SalesScreenState extends State<SalesScreen> {
                                   ),
                                 ),
                               ),
+                              if (_isEditing &&
+                                  widget.initialSale?.paymentMethod ==
+                                      'cod') ...[
+                                const SizedBox(height: 10),
+                                TextField(
+                                  key: const ValueKey('sale-buyer-address'),
+                                  controller: _buyerAddressController,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  maxLines: 2,
+                                  decoration: InputDecoration(
+                                    hintText: t(
+                                      'Buyer address',
+                                      'ক্রেতার ঠিকানা',
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.location_on_outlined,
+                                    ),
+                                    filled: true,
+                                    fillColor: const Color(0xFFFAF9F7),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(13),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFECEAE7),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        key: const ValueKey(
+                                          'sale-delivery-charge',
+                                        ),
+                                        controller: _deliveryController,
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d*\.?\d{0,2}'),
+                                          ),
+                                        ],
+                                        onChanged: (_) => setState(() {}),
+                                        decoration: InputDecoration(
+                                          hintText: t(
+                                            'Delivery charge',
+                                            'ডেলিভারি চার্জ',
+                                          ),
+                                          prefixText: '৳ ',
+                                          filled: true,
+                                          fillColor: const Color(0xFFFAF9F7),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              13,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFECEAE7),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: TextField(
+                                        key: const ValueKey(
+                                          'sale-advance-paid',
+                                        ),
+                                        controller: _advanceController,
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d*\.?\d{0,2}'),
+                                          ),
+                                        ],
+                                        onChanged: (_) => setState(() {}),
+                                        decoration: InputDecoration(
+                                          hintText: t(
+                                            'Advance paid',
+                                            'আগাম পরিশোধ',
+                                          ),
+                                          prefixText: '৳ ',
+                                          errorText: invalidAdvance
+                                              ? t('Exceeds total', 'মোটের বেশি')
+                                              : null,
+                                          filled: true,
+                                          fillColor: const Color(0xFFFAF9F7),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              13,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFECEAE7),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -388,6 +599,14 @@ class _SalesScreenState extends State<SalesScreen> {
                                     t('Remaining', 'বাকি'),
                                     Icons.hourglass_bottom_rounded,
                                   ),
+                                  if (_isEditing &&
+                                      widget.initialSale?.paymentMethod ==
+                                          'cod')
+                                    _paymentChip(
+                                      'cod',
+                                      'COD',
+                                      Icons.local_shipping_outlined,
+                                    ),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -400,6 +619,7 @@ class _SalesScreenState extends State<SalesScreen> {
                               ),
                               const SizedBox(height: 10),
                               TextField(
+                                key: const ValueKey('sale-discount'),
                                 controller: _discountController,
                                 keyboardType:
                                     const TextInputType.numberWithOptions(
@@ -451,8 +671,9 @@ class _SalesScreenState extends State<SalesScreen> {
                         height: 52,
                         child: FilledButton(
                           onPressed:
-                              _selectedProducts.isEmpty ||
+                              !_hasSelectedItems ||
                                   invalidDiscount ||
+                                  invalidAdvance ||
                                   _saving
                               ? null
                               : _saveSale,
@@ -473,7 +694,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                   ),
                                 )
                               : Text(
-                                  '${t('Save sale', 'বিক্রি সংরক্ষণ করুন')}  ·  ৳${_formatMoney(_total)}',
+                                  '${_isEditing ? t('Save changes', 'পরিবর্তন সংরক্ষণ করুন') : t('Save sale', 'বিক্রি সংরক্ষণ করুন')}  ·  ৳${_formatMoney(_total)}',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 15,
@@ -579,7 +800,11 @@ class _SalesScreenState extends State<SalesScreen> {
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: _saleRed, size: 18),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: _saleRed,
+              size: 18,
+            ),
           ],
         ),
       ),
@@ -602,7 +827,7 @@ class _SalesScreenState extends State<SalesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  product.name,
+                  _itemName(product),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -647,6 +872,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Widget _saleItemTile(ShopProduct product) {
     final qty = _quantity(product);
+    final unitPrice = _unitPrice(product);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: const BoxDecoration(
@@ -672,7 +898,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '৳${_formatMoney(product.price)} ${t('each', 'প্রতি')}',
+                  '৳${_formatMoney(unitPrice)} ${t('each', 'প্রতি')}',
                   style: const TextStyle(fontSize: 12, color: _saleMuted),
                 ),
               ],
@@ -711,7 +937,7 @@ class _SalesScreenState extends State<SalesScreen> {
           SizedBox(
             width: 58,
             child: Text(
-              '৳${_formatMoney(product.price * qty)}',
+              '৳${_formatMoney(unitPrice * qty)}',
               textAlign: TextAlign.right,
               style: const TextStyle(
                 fontSize: 13,
@@ -732,17 +958,90 @@ class _SalesScreenState extends State<SalesScreen> {
                 color: const Color(0xFFFFEEEE),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: _saleRed,
-              ),
+              child: const Icon(Icons.close_rounded, size: 16, color: _saleRed),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _archivedSaleItemTile(int index, SaleItem item) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: Color(0xFFF3F1EF))),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.inventory_2_outlined, color: _saleMuted, size: 38),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _saleInk,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '৳${_formatMoney(item.unitPrice)} ${t('each', 'প্রতি')}',
+                style: const TextStyle(fontSize: 12, color: _saleMuted),
+              ),
+            ],
+          ),
+        ),
+        _miniStep(
+          '−',
+          onTap: () => _changeArchivedQuantity(index, -1),
+          radius: const BorderRadius.horizontal(left: Radius.circular(9)),
+        ),
+        Container(
+          width: 34,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border.symmetric(
+              vertical: BorderSide(color: Color(0xFFECEAE7)),
+            ),
+          ),
+          child: Text(
+            '${item.quantity}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: _saleInk,
+            ),
+          ),
+        ),
+        _miniStep(
+          '+',
+          onTap: () => _changeArchivedQuantity(index, 1),
+          radius: const BorderRadius.horizontal(right: Radius.circular(9)),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 58,
+          child: Text(
+            '৳${_formatMoney(item.lineTotal)}',
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: _saleRed,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _miniStep(
     String label, {
@@ -778,7 +1077,10 @@ class _SalesScreenState extends State<SalesScreen> {
       avatar: Icon(icon, size: 17, color: selected ? _saleRed : _saleMuted),
       label: Text(label),
       selected: selected,
-      onSelected: (_) => setState(() => _paymentMethod = value),
+      onSelected: (_) => setState(() {
+        _paymentMethod = value;
+        if (value != 'cod') _advanceController.text = '0';
+      }),
       selectedColor: const Color(0xFFFFEEEE),
       backgroundColor: Colors.white,
       side: BorderSide(color: selected ? _saleRed : const Color(0xFFECEAE7)),
@@ -801,6 +1103,13 @@ class _SalesScreenState extends State<SalesScreen> {
     child: Column(
       children: [
         _TotalLine(label: t('Subtotal', 'উপমোট'), amount: _subtotal),
+        if (_deliveryCharge > 0) ...[
+          const SizedBox(height: 9),
+          _TotalLine(
+            label: t('Delivery charge', 'ডেলিভারি চার্জ'),
+            amount: _deliveryCharge,
+          ),
+        ],
         const SizedBox(height: 9),
         _TotalLine(
           label: t('Discount', 'ছাড়'),
@@ -816,6 +1125,20 @@ class _SalesScreenState extends State<SalesScreen> {
           amount: _total,
           isGrandTotal: true,
         ),
+        if (_paymentMethod == 'cod') ...[
+          const SizedBox(height: 10),
+          _TotalLine(
+            label: t('Advance paid', 'আগাম পরিশোধ'),
+            amount: -_advancePaid,
+            isDiscount: true,
+          ),
+          const SizedBox(height: 8),
+          _TotalLine(
+            label: t('COD due', 'COD বাকি'),
+            amount: _codDue,
+            isGrandTotal: true,
+          ),
+        ],
         if (_paymentMethod == 'remaining') ...[
           const SizedBox(height: 10),
           Row(
@@ -903,7 +1226,7 @@ class _TotalLine extends StatelessWidget {
   );
 }
 
-class SalesReportsScreen extends StatelessWidget {
+class SalesReportsScreen extends StatefulWidget {
   const SalesReportsScreen({
     super.key,
     required this.sales,
@@ -912,6 +1235,7 @@ class SalesReportsScreen extends StatelessWidget {
     required this.t,
     required this.onNavigate,
     required this.onNewSale,
+    required this.onEditSale,
   });
   final List<SaleRecord> sales;
   final ShopProfile profile;
@@ -919,11 +1243,36 @@ class SalesReportsScreen extends StatelessWidget {
   final String Function(String, String) t;
   final ValueChanged<int> onNavigate;
   final VoidCallback onNewSale;
+  final Future<SaleRecord?> Function(SaleRecord) onEditSale;
+
+  @override
+  State<SalesReportsScreen> createState() => _SalesReportsScreenState();
+}
+
+class _SalesReportsScreenState extends State<SalesReportsScreen> {
+  late List<SaleRecord> _sales;
+
+  @override
+  void initState() {
+    super.initState();
+    _sales = List<SaleRecord>.from(widget.sales);
+  }
+
+  String t(String en, String bn) => widget.t(en, bn);
+
+  Future<void> _editSale(SaleRecord sale) async {
+    final updatedSale = await widget.onEditSale(sale);
+    if (!mounted || updatedSale == null) return;
+    setState(() {
+      final index = _sales.indexWhere((item) => item.id == updatedSale.id);
+      if (index >= 0) _sales[index] = updatedSale;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final total = sales.fold<double>(0, (sum, sale) => sum + sale.total);
-    final remaining = sales
+    final total = _sales.fold<double>(0, (sum, sale) => sum + sale.total);
+    final remaining = _sales
         .where((sale) => sale.paymentMethod == 'remaining')
         .fold<double>(0, (sum, sale) => sum + sale.total);
     return Scaffold(
@@ -936,11 +1285,14 @@ class SalesReportsScreen extends StatelessWidget {
       bottomNavigationBar: BikritoBottomBar(
         selectedIndex: 2,
         t: t,
-        onNavigate: onNavigate,
+        onNavigate: widget.onNavigate,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: BikritoSaleButton(t: t, onPressed: onNewSale),
-      body: sales.isEmpty
+      floatingActionButton: BikritoSaleButton(
+        t: t,
+        onPressed: widget.onNewSale,
+      ),
+      body: _sales.isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -996,8 +1348,8 @@ class SalesReportsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
                 Text(
                   t(
-                    'All sales  ·  ${sales.length}',
-                    'সব বিক্রি  ·  ${sales.length}',
+                    'All sales  ·  ${_sales.length}',
+                    'সব বিক্রি  ·  ${_sales.length}',
                   ),
                   style: const TextStyle(
                     fontSize: 17,
@@ -1006,7 +1358,7 @@ class SalesReportsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ...sales.map((sale) => _saleCard(context, sale)),
+                ..._sales.map((sale) => _saleCard(context, sale)),
               ],
             ),
     );
@@ -1019,7 +1371,12 @@ class SalesReportsScreen extends StatelessWidget {
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
-        builder: (_) => _SaleDetails(sale: sale, t: t, profile: profile),
+        builder: (_) => _SaleDetails(
+          sale: sale,
+          t: t,
+          profile: widget.profile,
+          onEditSale: _editSale,
+        ),
       ),
       borderRadius: BorderRadius.circular(17),
       child: Container(
@@ -1092,10 +1449,16 @@ class SalesReportsScreen extends StatelessWidget {
 }
 
 class _SaleDetails extends StatelessWidget {
-  const _SaleDetails({required this.sale, required this.t, required this.profile});
+  const _SaleDetails({
+    required this.sale,
+    required this.t,
+    required this.profile,
+    required this.onEditSale,
+  });
   final SaleRecord sale;
   final String Function(String, String) t;
   final ShopProfile profile;
+  final Future<void> Function(SaleRecord) onEditSale;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -1193,20 +1556,43 @@ class _SaleDetails extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: FilledButton.icon(
-              onPressed: () => showInvoicePreview(
-                context: context,
-                profile: profile,
-                sale: sale,
-                t: t,
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      await onEditSale(sale);
+                    },
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: Text(t('Edit sale', 'বিক্রি সম্পাদনা')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _saleRed,
+                      side: const BorderSide(color: _saleRed),
+                    ),
+                  ),
+                ),
               ),
-              icon: const Icon(Icons.receipt_long_rounded),
-              label: Text(t('Invoice', 'ইনভয়েস')),
-              style: FilledButton.styleFrom(backgroundColor: _saleRed),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: () => showInvoicePreview(
+                      context: context,
+                      profile: profile,
+                      sale: sale,
+                      t: t,
+                    ),
+                    icon: const Icon(Icons.receipt_long_rounded),
+                    label: Text(t('Invoice', 'ইনভয়েস')),
+                    style: FilledButton.styleFrom(backgroundColor: _saleRed),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

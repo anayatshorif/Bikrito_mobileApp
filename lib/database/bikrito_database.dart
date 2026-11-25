@@ -5,6 +5,7 @@ import 'database_factory.dart';
 import '../models/shop_profile.dart';
 import '../models/shop_product.dart';
 import '../models/sale_record.dart';
+import '../models/customer_history.dart';
 
 /// Local SQLite storage for the Bikrito shop profile and product catalog.
 class BikritoDatabase {
@@ -165,6 +166,24 @@ class BikritoDatabase {
     };
   }
 
+  Future<CustomerHistory?> getCustomerHistory(String normalizedPhone) async {
+    final rows = await (await database).query(
+      'sales',
+      columns: ['buyer_name', 'buyer_address'],
+      where: 'payment_method = ? AND buyer_phone = ?',
+      whereArgs: ['cod', normalizedPhone],
+      orderBy: 'created_at DESC, id DESC',
+    );
+    if (rows.isEmpty) return null;
+
+    final latestOrder = rows.first;
+    return CustomerHistory(
+      name: latestOrder['buyer_name'] as String? ?? '',
+      address: latestOrder['buyer_address'] as String? ?? '',
+      orderCount: rows.length,
+    );
+  }
+
   Future<int> addProduct(ShopProduct product) async =>
       (await database).insert('products', {
         'name': product.name,
@@ -204,6 +223,50 @@ class BikritoDatabase {
         });
       }
       return saleId;
+    });
+  }
+
+  Future<void> updateSale(SaleRecord sale) async {
+    final saleId = sale.id;
+    if (saleId == null) {
+      throw ArgumentError.value(sale.id, 'sale.id', 'Sale must have an ID');
+    }
+
+    final db = await database;
+    await db.transaction((txn) async {
+      await _ensureSalesTables(txn);
+      final updatedCount = await txn.update(
+        'sales',
+        {
+          'subtotal': sale.subtotal,
+          'discount': sale.discount,
+          'total': sale.total,
+          'payment_method': sale.paymentMethod,
+          'created_at': sale.createdAt.millisecondsSinceEpoch,
+          'buyer_name': sale.buyerName,
+          'buyer_phone': sale.buyerPhone,
+          'buyer_address': sale.buyerAddress,
+          'delivery_charge': sale.deliveryCharge,
+          'advance_paid': sale.advancePaid,
+          'cod_due': sale.codDue,
+        },
+        where: 'id = ?',
+        whereArgs: [saleId],
+      );
+      if (updatedCount != 1) {
+        throw StateError('Sale $saleId could not be found for editing');
+      }
+
+      await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      for (final item in sale.items) {
+        await txn.insert('sale_items', {
+          'sale_id': saleId,
+          'product_id': item.productId,
+          'product_name': item.name,
+          'unit_price': item.unitPrice,
+          'quantity': item.quantity,
+        });
+      }
     });
   }
 

@@ -158,6 +158,18 @@ class _BikritoAppState extends State<BikritoApp> {
     return saved;
   }
 
+  Future<SaleRecord> _updateSale(SaleRecord sale) async {
+    await BikritoDatabase.instance.updateSale(sale);
+    if (mounted) {
+      setState(() {
+        _sales = _sales
+            .map((existing) => existing.id == sale.id ? sale : existing)
+            .toList();
+      });
+    }
+    return sale;
+  }
+
   Future<void> _openSalePage() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     await _navigatorKey.currentState!.push<void>(
@@ -169,6 +181,26 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
+          onUpdate: _updateSale,
+          onNavigate: _handleBottomNavigation,
+        ),
+      ),
+    );
+  }
+
+  Future<SaleRecord?> _openEditSalePage(SaleRecord sale) async {
+    final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
+    return _navigatorKey.currentState!.push<SaleRecord>(
+      MaterialPageRoute(
+        builder: (_) => SalesScreen(
+          products: _products,
+          saleCounts: saleCounts,
+          profile: _profile!,
+          bangla: _bangla,
+          t: t,
+          onSave: _recordSale,
+          onUpdate: _updateSale,
+          initialSale: sale,
           onNavigate: _handleBottomNavigation,
         ),
       ),
@@ -186,6 +218,7 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
+          onFindCustomer: BikritoDatabase.instance.getCustomerHistory,
           onNavigate: _handleBottomNavigation,
         ),
       ),
@@ -202,6 +235,7 @@ class _BikritoAppState extends State<BikritoApp> {
           t: t,
           onNavigate: _handleBottomNavigation,
           onNewSale: _openSalePage,
+          onEditSale: _openEditSalePage,
         ),
       ),
     );

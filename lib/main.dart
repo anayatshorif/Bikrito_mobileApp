@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'database/bikrito_database.dart';
+import 'bills/whatsapp_bill.dart' show remainingSaleDue;
 import 'models/sale_record.dart';
 import 'models/shop_profile.dart';
 import 'models/shop_product.dart';
@@ -158,6 +159,41 @@ class _BikritoAppState extends State<BikritoApp> {
     return saved;
   }
 
+  Future<SaleRecord> _updateSale(SaleRecord sale) async {
+    await BikritoDatabase.instance.updateSale(sale);
+    if (mounted) {
+      setState(() {
+        _sales = _sales
+            .map((existing) => existing.id == sale.id ? sale : existing)
+            .toList();
+      });
+    }
+    return sale;
+  }
+
+  Future<SaleRecord> _settleRemainingSaleInCash(SaleRecord sale) async {
+    if (sale.paymentMethod != 'remaining') {
+      throw StateError('Only remaining sales can be settled this way');
+    }
+
+    return _updateSale(
+      SaleRecord(
+        id: sale.id,
+        items: sale.items,
+        subtotal: sale.subtotal,
+        discount: sale.discount,
+        total: sale.total,
+        paymentMethod: 'cash',
+        createdAt: sale.createdAt,
+        buyerName: sale.buyerName,
+        buyerPhone: sale.buyerPhone,
+        buyerAddress: sale.buyerAddress,
+        deliveryCharge: sale.deliveryCharge,
+        codDue: 0,
+      ),
+    );
+  }
+
   Future<void> _openSalePage() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     await _navigatorKey.currentState!.push<void>(
@@ -169,6 +205,26 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
+          onUpdate: _updateSale,
+          onNavigate: _handleBottomNavigation,
+        ),
+      ),
+    );
+  }
+
+  Future<SaleRecord?> _openEditSalePage(SaleRecord sale) async {
+    final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
+    return _navigatorKey.currentState!.push<SaleRecord>(
+      MaterialPageRoute(
+        builder: (_) => SalesScreen(
+          products: _products,
+          saleCounts: saleCounts,
+          profile: _profile!,
+          bangla: _bangla,
+          t: t,
+          onSave: _recordSale,
+          onUpdate: _updateSale,
+          initialSale: sale,
           onNavigate: _handleBottomNavigation,
         ),
       ),
@@ -176,8 +232,12 @@ class _BikritoAppState extends State<BikritoApp> {
   }
 
   Future<void> _openOrderPage() async {
+    await _openOrderPageForResult();
+  }
+
+  Future<SaleRecord?> _openOrderPageForResult() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
-    await _navigatorKey.currentState!.push<void>(
+    return _navigatorKey.currentState!.push<SaleRecord>(
       MaterialPageRoute(
         builder: (_) => OrderScreen(
           products: _products,
@@ -186,6 +246,7 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onSave: _recordSale,
+          onFindCustomer: BikritoDatabase.instance.getCustomerHistory,
           onNavigate: _handleBottomNavigation,
         ),
       ),
@@ -202,6 +263,22 @@ class _BikritoAppState extends State<BikritoApp> {
           t: t,
           onNavigate: _handleBottomNavigation,
           onNewSale: _openSalePage,
+          onEditSale: _openEditSalePage,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRemainingSalesPage() async {
+    await _navigatorKey.currentState!.push<void>(
+      MaterialPageRoute(
+        builder: (_) => RemainingSalesScreen(
+          sales: _sales,
+          profile: _profile!,
+          t: t,
+          onNavigate: _handleBottomNavigation,
+          onEditSale: _openEditSalePage,
+          onSettleSale: _settleRemainingSaleInCash,
         ),
       ),
     );
@@ -216,6 +293,7 @@ class _BikritoAppState extends State<BikritoApp> {
           bangla: _bangla,
           t: t,
           onNavigate: _handleBottomNavigation,
+          onNewOrder: _openOrderPageForResult,
         ),
       ),
     );
@@ -251,9 +329,17 @@ class _BikritoAppState extends State<BikritoApp> {
         break;
       case 2:
         navigator.popUntil((route) => route.isFirst);
-        _openReportsPage();
+        _openOrdersPage();
         break;
       case 3:
+        navigator.popUntil((route) => route.isFirst);
+        _openRemainingSalesPage();
+        break;
+      case 4:
+        navigator.popUntil((route) => route.isFirst);
+        _openReportsPage();
+        break;
+      case 5:
         navigator.popUntil((route) => route.isFirst);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _homeKey.currentState?.openDrawer();
@@ -356,6 +442,7 @@ class _BikritoAppState extends State<BikritoApp> {
               onOrder: _openOrderPage,
               onReports: _openReportsPage,
               onOrders: _openOrdersPage,
+              onShowRemaining: _openRemainingSalesPage,
               onNavigate: _handleBottomNavigation,
             ),
     );
@@ -1234,6 +1321,7 @@ class HomeScreen extends StatefulWidget {
     required this.onOrder,
     required this.onReports,
     required this.onOrders,
+    required this.onShowRemaining,
     required this.onNavigate,
   });
   final ShopProfile profile;
@@ -1243,6 +1331,7 @@ class HomeScreen extends StatefulWidget {
   final String Function(String, String) t;
   final VoidCallback onLanguage, onAdd, onEditProfile, onLogout;
   final VoidCallback onNewSale, onOrder, onReports, onOrders;
+  final VoidCallback onShowRemaining;
   final ValueChanged<int> onNavigate;
   final ValueChanged<int> onDelete;
 
@@ -1281,7 +1370,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void openDrawer() {
-    setSelectedTab(3);
+    setSelectedTab(5);
     _scaffoldKey.currentState?.openDrawer();
   }
 
@@ -1313,13 +1402,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final allSales = sales.fold<double>(0, (sum, sale) => sum + sale.total);
     final remainingSales = sales
         .where((sale) => sale.paymentMethod == 'remaining')
-        .fold<double>(0, (sum, sale) => sum + sale.total);
+        .fold<double>(0, (sum, sale) => sum + remainingSaleDue(sale));
     return Scaffold(
       key: _scaffoldKey,
       drawer: Drawer(
         backgroundColor: Colors.white,
         child: SafeArea(
-          child: Column(
+          child: ListView(
+            padding: EdgeInsets.zero,
             children: [
               Container(
                 width: double.infinity,
@@ -1410,6 +1500,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   onOrders();
                 },
               ),
+              ListTile(
+                leading: const Icon(
+                  Icons.hourglass_bottom_rounded,
+                  color: _ink,
+                ),
+                title: Text(t('Remaining payments', 'বাকি পাওনা')),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onShowRemaining();
+                },
+              ),
               const Divider(indent: 18, endIndent: 18),
               ListTile(
                 leading: const Icon(Icons.tune_rounded, color: _ink),
@@ -1420,7 +1521,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   onEditProfile();
                 },
               ),
-              const Spacer(),
               const Divider(height: 1),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -1647,6 +1747,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             value: '৳${_money(remainingSales)}',
                             icon: Icons.hourglass_bottom_rounded,
                             highlight: true,
+                            onTap: widget.onShowRemaining,
                           ),
                           _OverviewMetric(
                             label: t('Products', 'পণ্য'),
@@ -2351,50 +2452,61 @@ class _OverviewMetric extends StatelessWidget {
     required this.value,
     required this.icon,
     this.highlight = false,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final bool highlight;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    decoration: BoxDecoration(
-      color: highlight ? const Color(0xFFFFEEEE) : _canvas,
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(13),
-    ),
-    child: Row(
-      children: [
-        Icon(icon, size: 17, color: _red),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, color: _muted),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: _ink,
-                ),
-              ),
-            ],
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: highlight ? const Color(0xFFFFEEEE) : _canvas,
+          borderRadius: BorderRadius.circular(13),
         ),
-      ],
+        child: Row(
+          children: [
+            Icon(icon, size: 17, color: _red),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10, color: _muted),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              const Icon(Icons.chevron_right_rounded, size: 17, color: _red),
+          ],
+        ),
+      ),
     ),
   );
 }

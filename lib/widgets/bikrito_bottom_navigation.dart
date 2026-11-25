@@ -18,51 +18,73 @@ class BikritoBottomBar extends StatelessWidget {
   final bool showSaleButton;
 
   @override
-  Widget build(BuildContext context) => BottomAppBar(
-    height: 70,
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    color: Colors.white,
-    elevation: 10,
-    shape: showSaleButton ? const CircularNotchedRectangle() : null,
-    notchMargin: 7,
-    child: Row(
-      children: [
-        Expanded(
-          child: _NavItem(
-            icon: Icons.home_rounded,
-            label: t('Home', 'হোম'),
-            selected: selectedIndex == 0,
-            onTap: () => onNavigate(0),
-          ),
-        ),
-        Expanded(
-          child: _NavItem(
-            icon: Icons.inventory_2_outlined,
-            label: t('Products', 'পণ্য'),
-            selected: selectedIndex == 1,
-            onTap: () => onNavigate(1),
-          ),
-        ),
-        if (showSaleButton) const SizedBox(width: 66),
-        Expanded(
-          child: _NavItem(
-            icon: Icons.receipt_long_rounded,
-            label: t('Reports', 'রিপোর্ট'),
-            selected: selectedIndex == 2,
-            onTap: () => onNavigate(2),
-          ),
-        ),
-        Expanded(
-          child: _NavItem(
-            icon: Icons.menu_rounded,
-            label: t('Menu', 'মেনু'),
-            selected: selectedIndex == 3,
-            onTap: () => onNavigate(3),
-          ),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final navItems = [
+      _NavItem(
+        icon: Icons.home_rounded,
+        label: t('Home', 'হোম'),
+        selected: selectedIndex == 0,
+        onTap: () => onNavigate(0),
+        compact: showSaleButton,
+      ),
+      _NavItem(
+        icon: Icons.inventory_2_outlined,
+        label: t('Products', 'পণ্য'),
+        selected: selectedIndex == 1,
+        onTap: () => onNavigate(1),
+        compact: showSaleButton,
+      ),
+      _NavItem(
+        icon: Icons.local_shipping_outlined,
+        label: t('Orders', 'অর্ডার'),
+        selected: selectedIndex == 2,
+        onTap: () => onNavigate(2),
+        compact: showSaleButton,
+      ),
+      _NavItem(
+        icon: Icons.hourglass_bottom_rounded,
+        label: t('Due', 'বাকি'),
+        selected: selectedIndex == 3,
+        onTap: () => onNavigate(3),
+        compact: showSaleButton,
+      ),
+      _NavItem(
+        icon: Icons.receipt_long_rounded,
+        label: t('Reports', 'রিপোর্ট'),
+        selected: selectedIndex == 4,
+        onTap: () => onNavigate(4),
+        compact: showSaleButton,
+      ),
+      _NavItem(
+        icon: Icons.menu_rounded,
+        label: t('Menu', 'মেনু'),
+        selected: selectedIndex == 5,
+        onTap: () => onNavigate(5),
+        compact: showSaleButton,
+      ),
+    ];
+
+    Widget navGroup(Iterable<Widget> items) =>
+        Row(children: items.map((item) => Expanded(child: item)).toList());
+
+    return BottomAppBar(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: Colors.white,
+      elevation: 10,
+      shape: showSaleButton ? const CircularNotchedRectangle() : null,
+      notchMargin: 7,
+      child: showSaleButton
+          ? Row(
+              children: [
+                Expanded(child: navGroup(navItems.take(3))),
+                const SizedBox(width: 74),
+                Expanded(child: navGroup(navItems.skip(3))),
+              ],
+            )
+          : navGroup(navItems),
+    );
+  }
 }
 
 class BikritoSaleButton extends StatelessWidget {
@@ -112,11 +134,13 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -136,7 +160,7 @@ class _NavItem extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: selected ? _navRed : _navMuted,
-              fontSize: 10,
+              fontSize: compact ? 8 : 10,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),

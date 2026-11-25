@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bills/invoice_actions.dart';
 import '../models/sale_record.dart';
 import '../models/shop_profile.dart';
+import '../orders/courier_details.dart';
 import '../widgets/bikrito_bottom_navigation.dart';
 import '../bills/whatsapp_bill.dart' show paymentLabel;
 
@@ -10,7 +11,7 @@ const _ordersRed = Color(0xFFD83B3B);
 const _ordersInk = Color(0xFF252525);
 const _ordersMuted = Color(0xFF858585);
 
-class OrdersScreen extends StatelessWidget {
+class OrdersScreen extends StatefulWidget {
   const OrdersScreen({
     super.key,
     required this.orders,
@@ -18,6 +19,7 @@ class OrdersScreen extends StatelessWidget {
     required this.bangla,
     required this.t,
     required this.onNavigate,
+    required this.onNewOrder,
   });
 
   final List<SaleRecord> orders;
@@ -25,6 +27,28 @@ class OrdersScreen extends StatelessWidget {
   final bool bangla;
   final String Function(String, String) t;
   final ValueChanged<int> onNavigate;
+  final Future<SaleRecord?> Function() onNewOrder;
+
+  @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  late List<SaleRecord> _orders;
+
+  @override
+  void initState() {
+    super.initState();
+    _orders = List<SaleRecord>.from(widget.orders);
+  }
+
+  String t(String en, String bn) => widget.t(en, bn);
+
+  Future<void> _createOrder() async {
+    final order = await widget.onNewOrder();
+    if (!mounted || order == null) return;
+    setState(() => _orders = [order, ..._orders]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,30 +60,49 @@ class OrdersScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: BikritoBottomBar(
-        selectedIndex: -1,
+        selectedIndex: 2,
         t: t,
-        onNavigate: onNavigate,
+        onNavigate: widget.onNavigate,
         showSaleButton: false,
       ),
-      body: orders.isEmpty
-          ? _emptyState()
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                _summaryCard(),
-                const SizedBox(height: 24),
-                Text(
-                  '${t('All orders', 'সব অর্ডার')}  ·  ${orders.length}',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: _ordersInk,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...orders.map((order) => _orderCard(context, order)),
-              ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton.icon(
+                onPressed: _createOrder,
+                icon: const Icon(Icons.add_shopping_cart_rounded),
+                label: Text(t('E-Commerce order', 'ই-কমার্স অর্ডার')),
+                style: FilledButton.styleFrom(backgroundColor: _ordersRed),
+              ),
             ),
+          ),
+          Expanded(
+            child: _orders.isEmpty
+                ? _emptyState()
+                : ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      _summaryCard(),
+                      const SizedBox(height: 24),
+                      Text(
+                        '${t('All orders', 'সব অর্ডার')}  ·  ${_orders.length}',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _ordersInk,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ..._orders.map((order) => _orderCard(context, order)),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -111,7 +154,7 @@ class OrdersScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '৳${_money(orders.fold<double>(0, (sum, o) => sum + o.codDue))}',
+                '৳${_money(_orders.fold<double>(0, (sum, o) => sum + o.codDue))}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -126,85 +169,110 @@ class OrdersScreen extends StatelessWidget {
   );
 
   Widget _orderCard(BuildContext context, SaleRecord order) {
-    return InkWell(
-      onTap: () => _showOrderDetails(context, order),
-      borderRadius: BorderRadius.circular(17),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: const Color(0xFFECEAE7)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0xFFECEAE7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => _showOrderDetails(context, order),
+            borderRadius: BorderRadius.circular(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEEEE),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.shopping_bag_outlined,
-                    color: _ordersRed,
-                    size: 21,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${t('Order', 'অর্ডার')} #${order.id ?? ''}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: _ordersInk,
-                        ),
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEEEE),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_orderDate(order.createdAt)}  ·  ${order.items.length} ${t('items', 'টি পণ্য')}',
-                        style:
-                            const TextStyle(fontSize: 11, color: _ordersMuted),
+                      child: const Icon(
+                        Icons.shopping_bag_outlined,
+                        color: _ordersRed,
+                        size: 21,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${t('Order', 'অর্ডার')} #${order.id ?? ''}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: _ordersInk,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_orderDate(order.createdAt)}  ·  ${order.items.length} ${t('items', 'টি পণ্য')}',
+                            style:
+                                const TextStyle(fontSize: 11, color: _ordersMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '৳${_money(order.codDue)}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: _ordersRed,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '৳${_money(order.codDue)}',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: _ordersRed,
+                if (order.buyerName.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    '${t('Buyer', 'ক্রেতা')}: ${order.buyerName.trim()}',
+                    style: const TextStyle(fontSize: 12, color: _ordersMuted),
                   ),
-                ),
+                ],
+                if (order.buyerPhone.trim().isNotEmpty)
+                  Text(
+                    '${t('Phone', 'ফোন')}: ${order.buyerPhone.trim()}',
+                    style: const TextStyle(fontSize: 12, color: _ordersMuted),
+                  ),
+                if (order.buyerAddress.trim().isNotEmpty)
+                  Text(
+                    '${t('Address', 'ঠিকানা')}: ${order.buyerAddress.trim()}',
+                    style: const TextStyle(fontSize: 12, color: _ordersMuted),
+                  ),
               ],
             ),
-            if (order.buyerName.trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                '${t('Buyer', 'ক্রেতা')}: ${order.buyerName.trim()}',
-                style: const TextStyle(fontSize: 12, color: _ordersMuted),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: () => copyCourierDetails(
+                context: context,
+                name: order.buyerName,
+                phone: order.buyerPhone,
+                address: order.buyerAddress,
+                codAmount: order.codDue,
+                t: t,
               ),
-            ],
-            if (order.buyerPhone.trim().isNotEmpty)
-              Text(
-                '${t('Phone', 'ফোন')}: ${order.buyerPhone.trim()}',
-                style: const TextStyle(fontSize: 12, color: _ordersMuted),
+              icon: const Icon(Icons.copy_rounded, size: 17),
+              label: Text(t('Copy for Courier', 'কুরিয়ারের জন্য কপি')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _ordersRed,
+                side: const BorderSide(color: _ordersRed),
               ),
-            if (order.buyerAddress.trim().isNotEmpty)
-              Text(
-                '${t('Address', 'ঠিকানা')}: ${order.buyerAddress.trim()}',
-                style: const TextStyle(fontSize: 12, color: _ordersMuted),
-              ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -216,7 +284,7 @@ class OrdersScreen extends StatelessWidget {
       isScrollControlled: true,
       builder: (_) => _OrderDetailsBottomSheet(
         order: order,
-        profile: profile,
+        profile: widget.profile,
         t: t,
       ),
     );

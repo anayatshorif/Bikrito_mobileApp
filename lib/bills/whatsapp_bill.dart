@@ -30,6 +30,78 @@ String paymentLabel(String method, String Function(String, String) t) =>
       _ => t('Cash', 'নগদ'),
     };
 
+double remainingSaleDue(SaleRecord sale) =>
+    (sale.total - sale.advancePaid).clamp(0, double.infinity).toDouble();
+
+String buildDueReminderText({
+  required ShopProfile profile,
+  required SaleRecord sale,
+}) {
+  final shop = profile.shop.trim().isEmpty ? 'Bikrito' : profile.shop.trim();
+  final customer = sale.buyerName.trim().isEmpty
+      ? 'ক্রেতা'
+      : sale.buyerName.trim();
+  final date = _billDate(sale.createdAt).split('  ').first;
+  final total = sale.total < 0 ? 0.0 : sale.total;
+  final paid = sale.advancePaid.clamp(0, total).toDouble();
+  final due = remainingSaleDue(sale);
+  final invoiceNumber = sale.id?.toString() ?? '';
+  final contact = [
+    profile.owner.trim(),
+    profile.phone.trim(),
+  ].where((part) => part.isNotEmpty).join('\n');
+
+  return [
+    'আসসালামু আলাইকুম,',
+    '',
+    'আপনার $shop দোকানের বাকি হিসাব:',
+    'ক্রেতার নাম: $customer',
+    'তারিখ: $date',
+    'ইনভয়েস নং: #$invoiceNumber',
+    'মোট বিল: ৳${_money(total)}',
+    'পরিশোধ করেছেন: ৳${_money(paid)}',
+    'বর্তমান বাকি: ৳${_money(due)}',
+    '',
+    'সুযোগমতো বাকি টাকা পরিশোধ করার অনুরোধ রইল।',
+    '',
+    'ধন্যবাদ ❤️',
+    '',
+    shop,
+    if (contact.isNotEmpty) contact,
+  ].join('\n');
+}
+
+String buildRemainingPaymentThankYouText({
+  required ShopProfile profile,
+  required SaleRecord sale,
+}) {
+  final shop = profile.shop.trim().isEmpty ? 'Bikrito' : profile.shop.trim();
+  final customer = sale.buyerName.trim().isEmpty
+      ? 'প্রিয় গ্রাহক'
+      : 'প্রিয় ${sale.buyerName.trim()}';
+  final contact = [
+    profile.owner.trim(),
+    profile.phone.trim(),
+  ].where((part) => part.isNotEmpty).join('\n');
+
+  return [
+    'আসসালামু আলাইকুম,',
+    '',
+    '$customer,',
+    '',
+    'আপনার $shop দোকানের বাকি টাকা পরিশোধ করার জন্য আন্তরিক ধন্যবাদ।',
+    'ইনভয়েস নং: #${sale.id ?? ''}',
+    'পরিশোধের পরিমাণ: ৳${_money(remainingSaleDue(sale))}',
+    '',
+    'আপনার সহযোগিতার জন্য কৃতজ্ঞ।',
+    '',
+    'ধন্যবাদ ❤️',
+    '',
+    shop,
+    if (contact.isNotEmpty) contact,
+  ].join('\n');
+}
+
 String buildBillText({
   required ShopProfile profile,
   required SaleRecord sale,

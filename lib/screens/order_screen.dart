@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,8 +8,10 @@ import 'package:flutter/services.dart';
 import '../bills/invoice_actions.dart';
 import '../bills/whatsapp_bill.dart';
 import '../models/sale_record.dart';
+import '../models/customer_history.dart';
 import '../models/shop_product.dart';
 import '../models/shop_profile.dart';
+import '../orders/courier_details.dart';
 import '../widgets/bikrito_bottom_navigation.dart';
 
 const _orderRed = Color(0xFFD83B3B);
@@ -23,6 +26,7 @@ class OrderScreen extends StatefulWidget {
     required this.bangla,
     required this.t,
     required this.onSave,
+    required this.onFindCustomer,
     required this.onNavigate,
     this.saleCounts = const {},
   });
@@ -32,6 +36,8 @@ class OrderScreen extends StatefulWidget {
   final bool bangla;
   final String Function(String, String) t;
   final Future<SaleRecord> Function(SaleRecord) onSave;
+  final Future<CustomerHistory?> Function(String normalizedPhone)
+  onFindCustomer;
   final ValueChanged<int> onNavigate;
   final Map<int, int> saleCounts;
 
@@ -47,6 +53,12 @@ class _OrderScreenState extends State<OrderScreen> {
   final _deliveryController = TextEditingController();
   final _advanceController = TextEditingController();
   final _discountController = TextEditingController();
+  Timer? _customerLookupTimer;
+  int _customerLookupRequest = 0;
+  CustomerHistory? _customerHistory;
+  String? _customerLookupError;
+  bool _isLookingUpCustomer = false;
+  bool _customerLookupComplete = false;
   String _searchQuery = '';
   final Map<int, int> _quantities = {};
   bool _saving = false;
@@ -112,8 +124,16 @@ class _OrderScreenState extends State<OrderScreen> {
       _buyerAddressController.text.trim().isNotEmpty &&
       !_saving;
 
+  bool get _canCopyCourier =>
+      _selectedProducts.isNotEmpty &&
+      _buyerNameController.text.trim().isNotEmpty &&
+      _buyerPhoneController.text.trim().isNotEmpty &&
+      _buyerAddressController.text.trim().isNotEmpty &&
+      !_saving;
+
   @override
   void dispose() {
+    _customerLookupTimer?.cancel();
     _buyerNameController.dispose();
     _buyerPhoneController.dispose();
     _buyerAddressController.dispose();
@@ -123,6 +143,62 @@ class _OrderScreenState extends State<OrderScreen> {
     _discountController.dispose();
     super.dispose();
   }
+
+  void _handleBuyerPhoneChanged(String value) {
+    _customerLookupTimer?.cancel();
+    final request = ++_customerLookupRequest;
+    final phone = normaliseBdPhone(value);
+    final hasValidPhone = RegExp(r'^8801\d{9}$').hasMatch(phone);
+    final previousHistory = _customerHistory;
+    if (previousHistory != null) {
+      if (_buyerNameController.text == previousHistory.name) {
+        _buyerNameController.clear();
+      }
+      if (_buyerAddressController.text == previousHistory.address) {
+        _buyerAddressController.clear();
+      }
+    }
+
+    setState(() {
+      _customerHistory = null;
+      _customerLookupError = null;
+      _customerLookupComplete = false;
+      _isLookingUpCustomer = hasValidPhone;
+    });
+    if (!hasValidPhone) return;
+
+    _customerLookupTimer = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        final history = await widget.onFindCustomer(phone);
+        if (!mounted || request != _customerLookupRequest) return;
+        setState(() {
+          _customerHistory = history;
+          _isLookingUpCustomer = false;
+          _customerLookupComplete = true;
+          if (history != null) {
+            _buyerNameController.text = history.name;
+            _buyerAddressController.text = history.address;
+          }
+        });
+      } catch (error, stackTrace) {
+        debugPrint('Looking up Bikrito customer failed: $error\n$stackTrace');
+        if (!mounted || request != _customerLookupRequest) return;
+        setState(() {
+          _isLookingUpCustomer = false;
+          _customerLookupError = error.toString();
+        });
+      }
+    });
+  }
+
+  Future<void> _copyDraftForCourier() => copyCourierDetails(
+    context: context,
+    name: _buyerNameController.text,
+    phone: normaliseBdPhone(_buyerPhoneController.text),
+    address: _buyerAddressController.text,
+    codAmount: _codDue,
+    t: t,
+  );
 
   void _changeQuantity(ShopProduct product, int amount) {
     final id = product.id;
@@ -174,7 +250,7 @@ class _OrderScreenState extends State<OrderScreen> {
         t: t,
       );
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context, savedSale);
     } catch (error, stackTrace) {
       debugPrint('Saving Bikrito order failed: $error\n$stackTrace');
       if (!mounted) return;
@@ -200,7 +276,7 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
       ),
       bottomNavigationBar: BikritoBottomBar(
-        selectedIndex: -1,
+        selectedIndex: 2,
         t: t,
         onNavigate: widget.onNavigate,
         showSaleButton: false,
@@ -306,35 +382,65 @@ class _OrderScreenState extends State<OrderScreen> {
                     ),
                     child: SafeArea(
                       top: false,
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton(
-                          onPressed: _canSave ? _saveOrder : null,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _orderRed,
-                            disabledBackgroundColor: const Color(0xFFDDDDDD),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  '${t('Save order', 'অর্ডার সংরক্ষণ করুন')}  ·  COD ৳${_formatMoney(_codDue)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: OutlinedButton.icon(
+                                onPressed: _canCopyCourier
+                                    ? _copyDraftForCourier
+                                    : null,
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                label: Text(
+                                  t('Copy for Courier', 'কুরিয়ারের জন্য কপি'),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _orderRed,
+                                  side: const BorderSide(color: _orderRed),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                        ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: FilledButton(
+                                onPressed: _canSave ? _saveOrder : null,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _orderRed,
+                                  disabledBackgroundColor: const Color(
+                                    0xFFDDDDDD,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: _saving
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        '${t('Save order', 'অর্ডার সংরক্ষণ করুন')} · ৳${_formatMoney(_codDue)}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -432,6 +538,7 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
         const SizedBox(height: 12),
         TextField(
+          key: const ValueKey('order-customer-name'),
           controller: _buyerNameController,
           textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
@@ -442,16 +549,46 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
         const SizedBox(height: 10),
         TextField(
+          key: const ValueKey('order-customer-phone'),
           controller: _buyerPhoneController,
           keyboardType: TextInputType.phone,
-          onChanged: (_) => setState(() {}),
+          onChanged: _handleBuyerPhoneChanged,
           decoration: _inputDecoration(
             t('Customer phone', 'ক্রেতার ফোন'),
             Icons.phone_outlined,
           ),
         ),
+        if (_isLookingUpCustomer) ...[
+          const SizedBox(height: 6),
+          Text(
+            t('Checking past orders…', 'আগের অর্ডার খোঁজা হচ্ছে…'),
+            style: const TextStyle(fontSize: 12, color: _orderMuted),
+          ),
+        ],
+        if (_customerLookupError != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            '${t('Could not load customer history', 'ক্রেতার আগের তথ্য লোড হয়নি')}: $_customerLookupError',
+            style: const TextStyle(fontSize: 12, color: _orderRed),
+          ),
+        ],
+        if (_customerLookupComplete) ...[
+          const SizedBox(height: 6),
+          Text(
+            t(
+              'Past orders: ${_customerHistory?.orderCount ?? 0}',
+              'আগের অর্ডার: ${_customerHistory?.orderCount ?? 0}',
+            ),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _orderRed,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         TextField(
+          key: const ValueKey('order-customer-address'),
           controller: _buyerAddressController,
           textCapitalization: TextCapitalization.sentences,
           maxLines: 3,

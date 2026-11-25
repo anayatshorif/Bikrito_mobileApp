@@ -20,7 +20,7 @@ class BikritoDatabase {
     _database = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 8,
+        version: 9,
         onCreate: (db, version) async {
           await db.execute('''
           CREATE TABLE shop_profile (
@@ -28,6 +28,8 @@ class BikritoDatabase {
             email TEXT NOT NULL DEFAULT '',
             user_id TEXT NOT NULL DEFAULT '',
             pin_hash TEXT NOT NULL DEFAULT '',
+            business_type TEXT NOT NULL DEFAULT '',
+            business_type_other TEXT NOT NULL DEFAULT '',
             owner TEXT NOT NULL,
             shop TEXT NOT NULL,
             phone TEXT NOT NULL,
@@ -99,10 +101,30 @@ class BikritoDatabase {
           if (oldVersion < 8) {
             // Defensive: earlier v7 databases may have been created without
             // the e-commerce columns. Add them only if they are missing.
-            await _ensureSalesColumn(db, 'buyer_address', "TEXT NOT NULL DEFAULT ''");
-            await _ensureSalesColumn(db, 'delivery_charge', 'REAL NOT NULL DEFAULT 0');
-            await _ensureSalesColumn(db, 'advance_paid', 'REAL NOT NULL DEFAULT 0');
+            await _ensureSalesColumn(
+              db,
+              'buyer_address',
+              "TEXT NOT NULL DEFAULT ''",
+            );
+            await _ensureSalesColumn(
+              db,
+              'delivery_charge',
+              'REAL NOT NULL DEFAULT 0',
+            );
+            await _ensureSalesColumn(
+              db,
+              'advance_paid',
+              'REAL NOT NULL DEFAULT 0',
+            );
             await _ensureSalesColumn(db, 'cod_due', 'REAL NOT NULL DEFAULT 0');
+          }
+          if (oldVersion < 9) {
+            await db.execute(
+              "ALTER TABLE shop_profile ADD COLUMN business_type TEXT NOT NULL DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE shop_profile ADD COLUMN business_type_other TEXT NOT NULL DEFAULT ''",
+            );
           }
         },
       ),

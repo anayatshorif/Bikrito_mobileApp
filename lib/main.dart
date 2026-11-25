@@ -24,6 +24,17 @@ const _red = Color(0xFFD83B3B);
 const _ink = Color(0xFF252525);
 const _muted = Color(0xFF858585);
 const _canvas = Color(0xFFFAF9F7);
+const _businessTypeValues = [
+  'clothing_boutiques',
+  'homemade_food_cloud_kitchens',
+  'organic_agro_products',
+  'mobile_tech_accessories',
+  'custom_gifts_crafts',
+  'skincare_cosmetics',
+  'baby_kids_items',
+  'jewelry_ornaments',
+  'other',
+];
 
 void main() => runApp(const BikritoApp());
 
@@ -698,8 +709,22 @@ class _SetupScreenState extends State<SetupScreen> {
   late final _owner = TextEditingController(text: widget.initial?.owner ?? '');
   late final _shop = TextEditingController(text: widget.initial?.shop ?? '');
   late final _phone = TextEditingController(text: widget.initial?.phone ?? '');
+  late String? _businessType = _initialBusinessType;
+  late final _businessTypeOther = TextEditingController(
+    text: widget.initial?.businessType == 'other'
+        ? widget.initial?.businessTypeOther ?? ''
+        : _businessType == 'other'
+        ? widget.initial?.businessType ?? ''
+        : widget.initial?.businessTypeOther ?? '',
+  );
   late String? _logoPath = widget.initial?.logoPath;
   late String? _logoData = widget.initial?.logoData;
+
+  String? get _initialBusinessType {
+    final value = widget.initial?.businessType ?? '';
+    if (value.isEmpty) return null;
+    return _businessTypeValues.contains(value) ? value : 'other';
+  }
 
   @override
   void dispose() {
@@ -709,6 +734,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _owner.dispose();
     _shop.dispose();
     _phone.dispose();
+    _businessTypeOther.dispose();
     super.dispose();
   }
 
@@ -993,6 +1019,108 @@ class _SetupScreenState extends State<SetupScreen> {
                             : null,
                       ),
                       const SizedBox(height: 18),
+                      _FieldLabel(t('Business type', 'ব্যবসার ধরন')),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: _businessType,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.store_mall_directory_outlined),
+                        ),
+                        hint: Text(
+                          t('Select business type', 'ব্যবসার ধরন বাছুন'),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'clothing_boutiques',
+                            child: Text(
+                              t('Clothing & Boutiques', 'পোশাক ও বুটিক'),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'homemade_food_cloud_kitchens',
+                            child: Text(
+                              t(
+                                'Homemade Food & Cloud Kitchens',
+                                'ঘরে তৈরি খাবার ও ক্লাউড কিচেন',
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'organic_agro_products',
+                            child: Text(
+                              t('Organic Agro Products', 'জৈব কৃষিপণ্য'),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'mobile_tech_accessories',
+                            child: Text(
+                              t(
+                                'Mobile & Tech Accessories',
+                                'মোবাইল ও প্রযুক্তি অ্যাক্সেসরিজ',
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'custom_gifts_crafts',
+                            child: Text(
+                              t(
+                                'Custom Gifts & Crafts',
+                                'কাস্টম উপহার ও হস্তশিল্প',
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'skincare_cosmetics',
+                            child: Text(
+                              t(
+                                'Skincare & Cosmetics',
+                                'ত্বকের যত্ন ও প্রসাধনী',
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'baby_kids_items',
+                            child: Text(t('Baby & Kids Items', 'শিশুদের পণ্য')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'jewelry_ornaments',
+                            child: Text(
+                              t('Jewelry & Ornaments', 'গয়না ও অলংকার'),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'other',
+                            child: Text(t('Other', 'অন্যান্য')),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _businessType = value),
+                      ),
+                      if (_businessType == 'other') ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          key: const ValueKey('business-type-other'),
+                          controller: _businessTypeOther,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            hintText: t(
+                              'Enter your business type',
+                              'আপনার ব্যবসার ধরন লিখুন',
+                            ),
+                            prefixIcon: const Icon(Icons.edit_outlined),
+                          ),
+                          validator: (value) =>
+                              _businessType != 'other' ||
+                                  (value != null && value.trim().isNotEmpty)
+                              ? null
+                              : t(
+                                  'Please specify your business type',
+                                  'আপনার ব্যবসার ধরন লিখুন',
+                                ),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
                       _FieldLabel(t('WhatsApp number', 'হোয়াটসঅ্যাপ নম্বর')),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -1027,6 +1155,10 @@ class _SetupScreenState extends State<SetupScreen> {
                               owner: _owner.text.trim(),
                               shop: _shop.text.trim(),
                               phone: _phone.text.trim(),
+                              businessType: _businessType ?? '',
+                              businessTypeOther: _businessType == 'other'
+                                  ? _businessTypeOther.text.trim()
+                                  : '',
                               logoPath: _logoPath,
                               logoData: _logoData,
                             );

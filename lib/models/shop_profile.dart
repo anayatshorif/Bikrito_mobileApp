@@ -6,6 +6,8 @@ class ShopProfile {
     this.email = '',
     this.userId = '',
     this.pinHash = '',
+    this.businessType = '',
+    this.businessTypeOther = '',
     this.logoPath,
     this.logoData,
   });
@@ -13,6 +15,8 @@ class ShopProfile {
   final String email;
   final String userId;
   final String pinHash;
+  final String businessType;
+  final String businessTypeOther;
   final String owner;
   final String shop;
   final String phone;
@@ -23,6 +27,8 @@ class ShopProfile {
     'email': email,
     'user_id': userId,
     'pin_hash': pinHash,
+    'business_type': businessType,
+    'business_type_other': businessTypeOther,
     'owner': owner,
     'shop': shop,
     'phone': phone,
@@ -34,6 +40,11 @@ class ShopProfile {
     email: (json['email'] ?? '') as String,
     userId: (json['user_id'] ?? json['userId'] ?? '') as String,
     pinHash: (json['pin_hash'] ?? json['pinHash'] ?? '') as String,
+    businessType:
+        (json['business_type'] ?? json['businessType'] ?? '') as String,
+    businessTypeOther:
+        (json['business_type_other'] ?? json['businessTypeOther'] ?? '')
+            as String,
     owner: json['owner'] as String? ?? '',
     shop: json['shop'] as String? ?? '',
     phone: json['phone'] as String? ?? '',

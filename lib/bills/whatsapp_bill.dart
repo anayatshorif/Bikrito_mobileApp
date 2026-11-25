@@ -26,6 +26,7 @@ String paymentLabel(String method, String Function(String, String) t) =>
       'nagad' => 'Nagad',
       'bank' => t('Bank', 'ব্যাংক'),
       'remaining' => t('Remaining', 'বাকি'),
+      'cod' => t('Cash on delivery', 'ক্যাশ অন ডেলিভারি'),
       _ => t('Cash', 'নগদ'),
     };
 
@@ -58,6 +59,20 @@ String buildBillText({
   lines.add('💳 ${t('Payment', 'পেমেন্ট')}: ${paymentLabel(sale.paymentMethod, t)}');
   if (sale.buyerName.trim().isNotEmpty) {
     lines.add('👤 ${t('Buyer', 'ক্রেতা')}: ${sale.buyerName.trim()}');
+  }
+  if (sale.buyerPhone.trim().isNotEmpty) {
+    lines.add('📞 ${t('Phone', 'ফোন')}: ${sale.buyerPhone.trim()}');
+  }
+  if (sale.buyerAddress.trim().isNotEmpty) {
+    lines.add('🏠 ${t('Address', 'ঠিকানা')}: ${sale.buyerAddress.trim()}');
+  }
+  if (sale.paymentMethod == 'cod' || sale.deliveryCharge > 0 || sale.advancePaid > 0) {
+    lines.add('');
+    lines.add('🚚 ${t('Delivery charge', 'ডেলিভারি চার্জ')}: ৳${_money(sale.deliveryCharge)}');
+    if (sale.advancePaid > 0) {
+      lines.add('💵 ${t('Advance paid', 'আগাম পেইড')}: ৳${_money(sale.advancePaid)}');
+    }
+    lines.add('💰 *${t('COD due', 'COD বাকি')}: ৳${_money(sale.codDue)}*');
   }
   lines.add('');
   lines.add(t('Thank you for shopping!', 'কেনাকাটা করার জন্য ধন্যবাদ!'));

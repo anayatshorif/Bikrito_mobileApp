@@ -24,6 +24,7 @@ class SalesScreen extends StatefulWidget {
     required this.t,
     required this.onSave,
     required this.onNavigate,
+    this.saleCounts = const {},
   });
 
   final List<ShopProduct> products;
@@ -32,6 +33,7 @@ class SalesScreen extends StatefulWidget {
   final String Function(String, String) t;
   final Future<SaleRecord> Function(SaleRecord) onSave;
   final ValueChanged<int> onNavigate;
+  final Map<int, int> saleCounts;
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
@@ -59,17 +61,29 @@ class _SalesScreenState extends State<SalesScreen> {
   int _quantity(ShopProduct product) =>
       product.id == null ? 0 : (_quantities[product.id] ?? 0);
 
+  List<ShopProduct> get _sortedProducts {
+    final counts = widget.saleCounts;
+    return List<ShopProduct>.from(widget.products)
+      ..sort((a, b) {
+        final aCount = a.id == null ? 0 : (counts[a.id] ?? 0);
+        final bCount = b.id == null ? 0 : (counts[b.id] ?? 0);
+        if (aCount != bCount) return bCount.compareTo(aCount);
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+  }
+
   List<ShopProduct> get _filteredProducts {
     final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return widget.products;
-    return widget.products
+    final sorted = _sortedProducts;
+    if (query.isEmpty) return sorted;
+    return sorted
         .where((p) => p.name.toLowerCase().contains(query))
         .toList();
   }
 
   List<ShopProduct> get _visibleProducts => _showAllProducts
       ? _filteredProducts
-      : _filteredProducts.take(2).toList();
+      : _filteredProducts.take(4).toList();
 
   double get _subtotal => _selectedProducts.fold<double>(
     0,
@@ -207,39 +221,22 @@ class _SalesScreenState extends State<SalesScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                       children: [
+                        _buildSearchBar(),
+                        const SizedBox(height: 16),
                         _card(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _SectionTitle(
-                                title: t('Select products', 'পণ্য নির্বাচন করুন'),
+                                title: _searchQuery.trim().isNotEmpty
+                                    ? t('Search results', 'অনুসন্ধানের ফলাফল')
+                                    : t('Most sold', 'সবচে়ে বিক্রিত'),
                                 subtitle: t(
-                                  'Search and tap + to add.',
-                                  'খুঁজুন এবং + চাপুন।',
+                                  'Tap + to add products.',
+                                  'পণ্য যোগ করতে + চাপুন।',
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              TextField(
-                                controller: _searchController,
-                                onChanged: (value) =>
-                                    setState(() => _searchQuery = value),
-                                decoration: InputDecoration(
-                                  hintText: t(
-                                    'Search products…',
-                                    'পণ্য খুঁজুন…',
-                                  ),
-                                  prefixIcon: const Icon(Icons.search_rounded),
-                                  filled: true,
-                                  fillColor: const Color(0xFFFAF9F7),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(13),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFECEAE7),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
                               if (_filteredProducts.isEmpty)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -259,7 +256,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                 )
                               else ...[
                                 ..._visibleProducts.map(_productTile),
-                                if (!_showAllProducts && _filteredProducts.length > 2)
+                                if (!_showAllProducts && _filteredProducts.length > 4)
                                   _seeAllButton(),
                               ],
                             ],
@@ -523,6 +520,41 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
   }
+
+  Widget _buildSearchBar() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _searchQuery = value),
+      decoration: InputDecoration(
+        hintText: t('Search products…', 'পণ্য খুজুন…'),
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: _searchQuery.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFECEAE7)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFECEAE7)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _saleRed),
+        ),
+      ),
+    ),
+  );
 
   Widget _seeAllButton() => Padding(
     padding: const EdgeInsets.only(top: 8),
@@ -1108,6 +1140,11 @@ class _SaleDetails extends StatelessWidget {
           ),
           const Divider(height: 24),
           _TotalLine(label: t('Subtotal', 'উপমোট'), amount: sale.subtotal),
+          if (sale.deliveryCharge > 0)
+            _TotalLine(
+              label: t('Delivery charge', 'ডেলিভারি চার্জ'),
+              amount: sale.deliveryCharge,
+            ),
           const SizedBox(height: 8),
           _TotalLine(
             label: t('Discount', 'ছাড়'),
@@ -1120,6 +1157,22 @@ class _SaleDetails extends StatelessWidget {
             amount: sale.total,
             isGrandTotal: true,
           ),
+          if (sale.advancePaid > 0) ...[
+            const SizedBox(height: 8),
+            _TotalLine(
+              label: t('Advance paid', 'আগাম পেইড'),
+              amount: -sale.advancePaid,
+              isDiscount: true,
+            ),
+          ],
+          if (sale.paymentMethod == 'cod' || sale.codDue > 0) ...[
+            const SizedBox(height: 8),
+            _TotalLine(
+              label: t('COD Due', 'COD বাকি'),
+              amount: sale.codDue,
+              isGrandTotal: true,
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             '${t('Payment', 'পেমেন্ট')}: ${paymentLabel(sale.paymentMethod, t)}',
@@ -1129,6 +1182,13 @@ class _SaleDetails extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '${t('Buyer', 'ক্রেতা')}: ${sale.buyerName}',
+              style: const TextStyle(color: _saleMuted, fontSize: 13),
+            ),
+          ],
+          if (sale.buyerAddress.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${t('Address', 'ঠিকানা')}: ${sale.buyerAddress}',
               style: const TextStyle(color: _saleMuted, fontSize: 13),
             ),
           ],

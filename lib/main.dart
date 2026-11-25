@@ -13,6 +13,8 @@ import 'database/bikrito_database.dart';
 import 'models/sale_record.dart';
 import 'models/shop_profile.dart';
 import 'models/shop_product.dart';
+import 'screens/order_screen.dart';
+import 'screens/orders_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/sales_screen.dart';
 import 'widgets/bikrito_bottom_navigation.dart';
@@ -146,10 +148,29 @@ class _BikritoAppState extends State<BikritoApp> {
   }
 
   Future<void> _openSalePage() async {
+    final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     await _navigatorKey.currentState!.push<void>(
       MaterialPageRoute(
         builder: (_) => SalesScreen(
           products: _products,
+          saleCounts: saleCounts,
+          profile: _profile!,
+          bangla: _bangla,
+          t: t,
+          onSave: _recordSale,
+          onNavigate: _handleBottomNavigation,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openOrderPage() async {
+    final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
+    await _navigatorKey.currentState!.push<void>(
+      MaterialPageRoute(
+        builder: (_) => OrderScreen(
+          products: _products,
+          saleCounts: saleCounts,
           profile: _profile!,
           bangla: _bangla,
           t: t,
@@ -170,6 +191,20 @@ class _BikritoAppState extends State<BikritoApp> {
           t: t,
           onNavigate: _handleBottomNavigation,
           onNewSale: _openSalePage,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openOrdersPage() async {
+    await _navigatorKey.currentState!.push<void>(
+      MaterialPageRoute(
+        builder: (_) => OrdersScreen(
+          orders: _sales.where((s) => s.paymentMethod == 'cod').toList(),
+          profile: _profile!,
+          bangla: _bangla,
+          t: t,
+          onNavigate: _handleBottomNavigation,
         ),
       ),
     );
@@ -307,7 +342,9 @@ class _BikritoAppState extends State<BikritoApp> {
               onEditProfile: _editProfile,
               onLogout: () => setState(() => _authenticated = false),
               onNewSale: _openSalePage,
+              onOrder: _openOrderPage,
               onReports: _openReportsPage,
+              onOrders: _openOrdersPage,
               onNavigate: _handleBottomNavigation,
             ),
     );
@@ -1062,7 +1099,9 @@ class HomeScreen extends StatefulWidget {
     required this.onEditProfile,
     required this.onLogout,
     required this.onNewSale,
+    required this.onOrder,
     required this.onReports,
+    required this.onOrders,
     required this.onNavigate,
   });
   final ShopProfile profile;
@@ -1071,7 +1110,7 @@ class HomeScreen extends StatefulWidget {
   final bool bangla;
   final String Function(String, String) t;
   final VoidCallback onLanguage, onAdd, onEditProfile, onLogout;
-  final VoidCallback onNewSale, onReports;
+  final VoidCallback onNewSale, onOrder, onReports, onOrders;
   final ValueChanged<int> onNavigate;
   final ValueChanged<int> onDelete;
 
@@ -1127,7 +1166,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final onEditProfile = widget.onEditProfile;
     final onLogout = widget.onLogout;
     final onNewSale = widget.onNewSale;
+    final onOrder = widget.onOrder;
     final onReports = widget.onReports;
+    final onOrders = widget.onOrders;
     final now = DateTime.now();
     final todaySales = sales
         .where(
@@ -1211,11 +1252,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.shopping_bag_outlined, color: _ink),
+                title: Text(
+                  t('E-Commerce Order', 'ই-কমার্স অর্ডার'),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  onOrder();
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.receipt_long_rounded, color: _ink),
                 title: Text(t('Sales reports', 'বিক্রির রিপোর্ট')),
                 onTap: () {
                   Navigator.pop(context);
                   onReports();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.local_shipping_outlined, color: _ink),
+                title: Text(t('Orders', 'অর্ডার')),
+                onTap: () {
+                  Navigator.pop(context);
+                  onOrders();
                 },
               ),
               const Divider(indent: 18, endIndent: 18),
@@ -1474,6 +1534,71 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             SliverPadding(
+              padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+              sliver: SliverToBoxAdapter(
+                child: InkWell(
+                  onTap: onOrder,
+                  borderRadius: BorderRadius.circular(19),
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEEEE),
+                      borderRadius: BorderRadius.circular(19),
+                      border: Border.all(color: const Color(0xFFF3D5D5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: _red,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                t('E-Commerce Order', 'ই-কমার্স অর্ডার'),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: _ink,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                t(
+                                  'Record COD orders with delivery charge.',
+                                  'COD অর্ডার ডেলিারি চার্জসহ বুক করুন।',
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: _muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                          color: _red,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
               padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
               sliver: SliverToBoxAdapter(
                 child: SizedBox(
@@ -1607,11 +1732,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               )
-            else
+            else ...[
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
                 sliver: SliverList.separated(
-                  itemCount: products.length,
+                  itemCount: products.length > 4 ? 4 : products.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final product = products[index];
@@ -1674,6 +1799,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
+              if (products.length > 4)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+                  sliver: SliverToBoxAdapter(
+                    child: OutlinedButton.icon(
+                      onPressed: () => widget.onNavigate(1),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      label: Text(t('View all products', 'সব পণ্য দেখুন')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _red,
+                        side: const BorderSide(color: _red),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                const SliverPadding(padding: EdgeInsets.only(bottom: 28)),
+            ],
             if (sales.isNotEmpty) ...[
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(22, 26, 22, 12),

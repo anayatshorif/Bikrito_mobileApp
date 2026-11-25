@@ -20,7 +20,7 @@ class BikritoDatabase {
     _database = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 6,
+        version: 8,
         onCreate: (db, version) async {
           await db.execute('''
           CREATE TABLE shop_profile (
@@ -82,6 +82,28 @@ class BikritoDatabase {
               "ALTER TABLE sales ADD COLUMN buyer_phone TEXT NOT NULL DEFAULT ''",
             );
           }
+          if (oldVersion < 7) {
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN buyer_address TEXT NOT NULL DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN delivery_charge REAL NOT NULL DEFAULT 0",
+            );
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN advance_paid REAL NOT NULL DEFAULT 0",
+            );
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN cod_due REAL NOT NULL DEFAULT 0",
+            );
+          }
+          if (oldVersion < 8) {
+            // Defensive: earlier v7 databases may have been created without
+            // the e-commerce columns. Add them only if they are missing.
+            await _ensureSalesColumn(db, 'buyer_address', "TEXT NOT NULL DEFAULT ''");
+            await _ensureSalesColumn(db, 'delivery_charge', 'REAL NOT NULL DEFAULT 0');
+            await _ensureSalesColumn(db, 'advance_paid', 'REAL NOT NULL DEFAULT 0');
+            await _ensureSalesColumn(db, 'cod_due', 'REAL NOT NULL DEFAULT 0');
+          }
         },
       ),
     );
@@ -104,6 +126,21 @@ class BikritoDatabase {
   Future<List<ShopProduct>> getProducts() async {
     final rows = await (await database).query('products', orderBy: 'id DESC');
     return rows.map(ShopProduct.fromJson).toList();
+  }
+
+  Future<Map<int, int>> getProductSaleCounts() async {
+    final db = await database;
+    await _ensureSalesTables(db);
+    final rows = await db.rawQuery('''
+      SELECT product_id, SUM(quantity) as total_qty
+      FROM sale_items
+      WHERE product_id IS NOT NULL
+      GROUP BY product_id
+    ''');
+    return {
+      for (final row in rows)
+        (row['product_id'] as num).toInt(): (row['total_qty'] as num).toInt(),
+    };
   }
 
   Future<int> addProduct(ShopProduct product) async =>
@@ -130,6 +167,10 @@ class BikritoDatabase {
         'created_at': sale.createdAt.millisecondsSinceEpoch,
         'buyer_name': sale.buyerName,
         'buyer_phone': sale.buyerPhone,
+        'buyer_address': sale.buyerAddress,
+        'delivery_charge': sale.deliveryCharge,
+        'advance_paid': sale.advancePaid,
+        'cod_due': sale.codDue,
       });
       for (final item in sale.items) {
         await txn.insert('sale_items', {
@@ -179,10 +220,33 @@ class BikritoDatabase {
           ),
           buyerName: sale['buyer_name'] as String? ?? '',
           buyerPhone: sale['buyer_phone'] as String? ?? '',
+          buyerAddress: sale['buyer_address'] as String? ?? '',
+          deliveryCharge: (sale['delivery_charge'] as num? ?? 0).toDouble(),
+          advancePaid: (sale['advance_paid'] as num? ?? 0).toDouble(),
+          codDue: (sale['cod_due'] as num? ?? 0).toDouble(),
         ),
       );
     }
     return records;
+  }
+}
+
+Future<void> _ensureSalesColumn(
+  DatabaseExecutor db,
+  String columnName,
+  String columnDef,
+) async {
+  final rows = await db.rawQuery('PRAGMA table_info(sales)');
+  var exists = false;
+  for (final row in rows) {
+    final name = row['name'] as String?;
+    if (name == columnName) {
+      exists = true;
+      break;
+    }
+  }
+  if (!exists) {
+    await db.execute('ALTER TABLE sales ADD COLUMN $columnName $columnDef');
   }
 }
 
@@ -196,7 +260,11 @@ Future<void> _ensureSalesTables(DatabaseExecutor db) async {
       payment_method TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       buyer_name TEXT NOT NULL DEFAULT '',
-      buyer_phone TEXT NOT NULL DEFAULT ''
+      buyer_phone TEXT NOT NULL DEFAULT '',
+      buyer_address TEXT NOT NULL DEFAULT '',
+      delivery_charge REAL NOT NULL DEFAULT 0,
+      advance_paid REAL NOT NULL DEFAULT 0,
+      cod_due REAL NOT NULL DEFAULT 0
     )
   ''');
   await db.execute('''

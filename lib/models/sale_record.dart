@@ -25,6 +25,10 @@ class SaleRecord {
     required this.createdAt,
     this.buyerName = '',
     this.buyerPhone = '',
+    this.buyerAddress = '',
+    this.deliveryCharge = 0,
+    this.advancePaid = 0,
+    this.codDue = 0,
   });
 
   final int? id;
@@ -36,6 +40,10 @@ class SaleRecord {
   final DateTime createdAt;
   final String buyerName;
   final String buyerPhone;
+  final String buyerAddress;
+  final double deliveryCharge;
+  final double advancePaid;
+  final double codDue;
 
   SaleRecord withId(int saleId) => SaleRecord(
     id: saleId,
@@ -47,5 +55,9 @@ class SaleRecord {
     createdAt: createdAt,
     buyerName: buyerName,
     buyerPhone: buyerPhone,
+    buyerAddress: buyerAddress,
+    deliveryCharge: deliveryCharge,
+    advancePaid: advancePaid,
+    codDue: codDue,
   );
 }

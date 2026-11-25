@@ -156,15 +156,32 @@ class BikritoInvoice extends StatelessWidget {
   }
 
   Widget _billTo() {
+    final parts = <String>[sale.buyerName.trim()];
+    if (sale.buyerPhone.trim().isNotEmpty) parts.add(sale.buyerPhone.trim());
+    if (sale.buyerAddress.trim().isNotEmpty) parts.add(sale.buyerAddress.trim());
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: const Color(0xFFFAF9F7),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        '${t('Bill To', 'ক্রেতা')}: ${sale.buyerName.trim()}',
-        style: const TextStyle(fontSize: 13, color: _invoiceInk),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${t('Bill To', 'ক্রেতা')}: ${parts.first}',
+            style: const TextStyle(fontSize: 13, color: _invoiceInk),
+          ),
+          if (parts.length > 1) ...[
+            const SizedBox(height: 4),
+            ...parts.skip(1).map(
+              (part) => Text(
+                part,
+                style: const TextStyle(fontSize: 12, color: _invoiceMuted),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -228,6 +245,9 @@ class BikritoInvoice extends StatelessWidget {
   );
 
   Widget _totals() {
+    final isCod = sale.paymentMethod == 'cod' ||
+        sale.deliveryCharge > 0 ||
+        sale.advancePaid > 0;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
@@ -239,6 +259,18 @@ class BikritoInvoice extends StatelessWidget {
               '-৳${_money(sale.discount)}',
               discount: true,
             ),
+          if (isCod) ...[
+            _totalRow(
+              t('Delivery charge', 'ডেলিভারি চার্জ'),
+              '৳${_money(sale.deliveryCharge)}',
+            ),
+            if (sale.advancePaid > 0)
+              _totalRow(
+                t('Advance paid', 'আগাম পেইড'),
+                '-৳${_money(sale.advancePaid)}',
+                discount: true,
+              ),
+          ],
           Container(
             margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.only(top: 12),
@@ -250,7 +282,7 @@ class BikritoInvoice extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  t('Total', 'মোট'),
+                  isCod ? t('COD Due', 'COD বাকি') : t('Total', 'মোট'),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -258,7 +290,7 @@ class BikritoInvoice extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '৳${_money(sale.total)}',
+                  '৳${_money(isCod ? sale.codDue : sale.total)}',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,

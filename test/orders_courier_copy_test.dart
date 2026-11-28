@@ -49,10 +49,7 @@ void main() {
           bangla: false,
           t: (en, _) => en,
           onNavigate: (_) {},
-<<<<<<< HEAD
           onNewOrder: () async => null,
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
         ),
       ),
     );
@@ -70,7 +67,6 @@ void main() {
       'COD Amount: ৳1150',
     );
   });
-<<<<<<< HEAD
 
   testWidgets('orders page opens e-commerce order creation', (tester) async {
     var createOrderTapped = false;
@@ -108,6 +104,4 @@ void main() {
     await tester.tap(find.text('Orders').last);
     expect(navigatedTabs, [2]);
   });
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
 }

@@ -16,8 +16,10 @@ import 'models/shop_profile.dart';
 import 'models/shop_product.dart';
 import 'screens/order_screen.dart';
 import 'screens/orders_screen.dart';
+import 'screens/product_details_screen.dart';
 import 'screens/products_screen.dart';
 import 'screens/sales_screen.dart';
+import 'widgets/app_transitions.dart';
 import 'widgets/bikrito_bottom_navigation.dart';
 import 'widgets/bikrito_logo.dart';
 
@@ -171,7 +173,6 @@ class _BikritoAppState extends State<BikritoApp> {
     return sale;
   }
 
-<<<<<<< HEAD
   Future<SaleRecord> _settleRemainingSaleInCash(SaleRecord sale) async {
     if (sale.paymentMethod != 'remaining') {
       throw StateError('Only remaining sales can be settled this way');
@@ -194,13 +195,10 @@ class _BikritoAppState extends State<BikritoApp> {
       ),
     );
   }
-
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   Future<void> _openSalePage() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     await _navigatorKey.currentState!.push<void>(
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => SalesScreen(
           products: _products,
           saleCounts: saleCounts,
@@ -218,7 +216,7 @@ class _BikritoAppState extends State<BikritoApp> {
   Future<SaleRecord?> _openEditSalePage(SaleRecord sale) async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     return _navigatorKey.currentState!.push<SaleRecord>(
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => SalesScreen(
           products: _products,
           saleCounts: saleCounts,
@@ -241,7 +239,7 @@ class _BikritoAppState extends State<BikritoApp> {
   Future<SaleRecord?> _openOrderPageForResult() async {
     final saleCounts = await BikritoDatabase.instance.getProductSaleCounts();
     return _navigatorKey.currentState!.push<SaleRecord>(
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => OrderScreen(
           products: _products,
           saleCounts: saleCounts,
@@ -258,68 +256,60 @@ class _BikritoAppState extends State<BikritoApp> {
 
   Future<void> _openReportsPage() async {
     await _navigatorKey.currentState!.push<void>(
-      MaterialPageRoute(
-        builder: (_) => SalesReportsScreen(
-          sales: _sales,
-          profile: _profile!,
-          bangla: _bangla,
-          t: t,
-          onNavigate: _handleBottomNavigation,
-          onNewSale: _openSalePage,
-          onEditSale: _openEditSalePage,
-<<<<<<< HEAD
-        ),
-      ),
+      AppDestinationRoute(builder: _buildReportsPage),
     );
   }
+
+  Widget _buildReportsPage(BuildContext context) => SalesReportsScreen(
+    sales: _sales,
+    profile: _profile!,
+    bangla: _bangla,
+    t: t,
+    onNavigate: _handleBottomNavigation,
+    onNewSale: _openSalePage,
+    onEditSale: _openEditSalePage,
+  );
 
   Future<void> _openRemainingSalesPage() async {
     await _navigatorKey.currentState!.push<void>(
-      MaterialPageRoute(
-        builder: (_) => RemainingSalesScreen(
-          sales: _sales,
-          profile: _profile!,
-          t: t,
-          onNavigate: _handleBottomNavigation,
-          onEditSale: _openEditSalePage,
-          onSettleSale: _settleRemainingSaleInCash,
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
-        ),
-      ),
+      AppDestinationRoute(builder: _buildRemainingSalesPage),
     );
   }
+
+  Widget _buildRemainingSalesPage(BuildContext context) => RemainingSalesScreen(
+    sales: _sales,
+    profile: _profile!,
+    t: t,
+    onNavigate: _handleBottomNavigation,
+    onEditSale: _openEditSalePage,
+    onSettleSale: _settleRemainingSaleInCash,
+  );
 
   Future<void> _openOrdersPage() async {
     await _navigatorKey.currentState!.push<void>(
-      MaterialPageRoute(
-        builder: (_) => OrdersScreen(
-          orders: _sales.where((s) => s.paymentMethod == 'cod').toList(),
-          profile: _profile!,
-          bangla: _bangla,
-          t: t,
-          onNavigate: _handleBottomNavigation,
-          onNewOrder: _openOrderPageForResult,
-        ),
-      ),
+      AppDestinationRoute(builder: _buildOrdersPage),
     );
   }
 
-  Future<void> _openProductsPage() async {
-    await _navigatorKey.currentState!.push<void>(
-      MaterialPageRoute(
-        builder: (_) => ProductsScreen(
-          products: _products,
-          t: t,
-          onNavigate: _handleBottomNavigation,
-          onNewSale: _openSalePage,
-          onAdd: _openProductForm,
-          onDelete: _deleteProductById,
-          onRefresh: _refreshProducts,
-        ),
-      ),
-    );
-  }
+  Widget _buildOrdersPage(BuildContext context) => OrdersScreen(
+    orders: _sales.where((s) => s.paymentMethod == 'cod').toList(),
+    profile: _profile!,
+    bangla: _bangla,
+    t: t,
+    onNavigate: _handleBottomNavigation,
+    onNewOrder: _openOrderPageForResult,
+  );
+
+  Widget _buildProductsPage(BuildContext context) => ProductsScreen(
+    products: _products,
+    t: t,
+    onNavigate: _handleBottomNavigation,
+    onNewSale: _openSalePage,
+    onAdd: _openProductForm,
+    onDelete: _deleteProductById,
+    onRefresh: _refreshProducts,
+    onOpenProduct: _openProductDetails,
+  );
 
   void _handleBottomNavigation(int index) {
     final navigator = _navigatorKey.currentState!;
@@ -330,20 +320,16 @@ class _BikritoAppState extends State<BikritoApp> {
         _homeKey.currentState?.scrollToTop();
         break;
       case 1:
-        navigator.popUntil((route) => route.isFirst);
-        _openProductsPage();
+        _switchDestination(_buildProductsPage);
         break;
       case 2:
-        navigator.popUntil((route) => route.isFirst);
-        _openOrdersPage();
+        _switchDestination(_buildOrdersPage);
         break;
       case 3:
-        navigator.popUntil((route) => route.isFirst);
-        _openRemainingSalesPage();
+        _switchDestination(_buildRemainingSalesPage);
         break;
       case 4:
-        navigator.popUntil((route) => route.isFirst);
-        _openReportsPage();
+        _switchDestination(_buildReportsPage);
         break;
       case 5:
         navigator.popUntil((route) => route.isFirst);
@@ -352,6 +338,15 @@ class _BikritoAppState extends State<BikritoApp> {
         });
         break;
     }
+  }
+
+  /// Swaps straight to another tab so only one transition plays instead of a
+  /// reverse animation back home followed by a forward one.
+  void _switchDestination(WidgetBuilder builder) {
+    _navigatorKey.currentState!.pushAndRemoveUntil<void>(
+      AppDestinationRoute<void>(builder: builder),
+      (route) => route.isFirst,
+    );
   }
 
   @override
@@ -450,13 +445,26 @@ class _BikritoAppState extends State<BikritoApp> {
               onOrders: _openOrdersPage,
               onShowRemaining: _openRemainingSalesPage,
               onNavigate: _handleBottomNavigation,
+              onOpenProduct: _openProductDetails,
             ),
+    );
+  }
+
+  Future<void> _openProductDetails(ShopProduct product) async {
+    await _navigatorKey.currentState!.push<void>(
+      AppPageRoute(
+        builder: (_) => ProductDetailsScreen(
+          product: product,
+          t: t,
+          onNewSale: _openSalePage,
+        ),
+      ),
     );
   }
 
   Future<void> _openProductForm() async {
     final product = await _navigatorKey.currentState!.push<ShopProduct>(
-      MaterialPageRoute(
+      AppFormRoute(
         builder: (_) => ProductFormScreen(
           bangla: _bangla,
           t: t,
@@ -470,7 +478,7 @@ class _BikritoAppState extends State<BikritoApp> {
 
   Future<void> _editProfile() async {
     final profile = await _navigatorKey.currentState!.push<ShopProfile>(
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => SetupScreen(
           bangla: _bangla,
           t: t,
@@ -1329,6 +1337,7 @@ class HomeScreen extends StatefulWidget {
     required this.onOrders,
     required this.onShowRemaining,
     required this.onNavigate,
+    required this.onOpenProduct,
   });
   final ShopProfile profile;
   final List<ShopProduct> products;
@@ -1340,6 +1349,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onShowRemaining;
   final ValueChanged<int> onNavigate;
   final ValueChanged<int> onDelete;
+  final ValueChanged<ShopProduct> onOpenProduct;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -1979,60 +1989,73 @@ class _HomeScreenState extends State<HomeScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final product = products[index];
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+                    return Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(17),
+                      child: InkWell(
+                        onTap: () => widget.onOpenProduct(product),
                         borderRadius: BorderRadius.circular(17),
-                        border: Border.all(color: const Color(0xFFEFEDEB)),
-                      ),
-                      child: Row(
-                        children: [
-                          _ProductImage(
-                            path: product.imagePath,
-                            imageData: product.imageData,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(17),
+                            border: Border.all(color: const Color(0xFFEFEDEB)),
                           ),
-                          const SizedBox(width: 13),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
-                                    color: _ink,
-                                  ),
+                          child: Row(
+                            children: [
+                              _ProductImage(
+                                path: product.imagePath,
+                                imageData: product.imageData,
+                                heroTag: product.id != null
+                                    ? 'product-photo-${product.id}'
+                                    : null,
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: _ink,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      '৳${_money(product.price)}',
+                                      style: const TextStyle(
+                                        color: _red,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  '৳${_money(product.price)}',
-                                  style: const TextStyle(
-                                    color: _red,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                  ),
+                              ),
+                              PopupMenuButton<String>(
+                                icon: const Icon(
+                                  Icons.more_horiz_rounded,
+                                  color: _muted,
                                 ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(
-                              Icons.more_horiz_rounded,
-                              color: _muted,
-                            ),
-                            onSelected: (value) {
-                              if (value == 'delete') onDelete(index);
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text(t('Remove product', 'পণ্য সরান')),
+                                onSelected: (value) {
+                                  if (value == 'delete') onDelete(index);
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text(
+                                      t('Remove product', 'পণ্য সরান'),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -2563,30 +2586,35 @@ class _StatTile extends StatelessWidget {
 }
 
 class _ProductImage extends StatelessWidget {
-  const _ProductImage({this.path, this.imageData});
+  const _ProductImage({this.path, this.imageData, this.heroTag});
   final String? path;
   final String? imageData;
+  final Object? heroTag;
   @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(12),
-    child: SizedBox(
-      width: 58,
-      height: 58,
-      child: imageData != null
-          ? Image.memory(
-              base64Decode(imageData!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _placeholder(),
-            )
-          : path != null
-          ? Image.file(
-              File(path!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _placeholder(),
-            )
-          : _placeholder(),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 58,
+        height: 58,
+        child: imageData != null
+            ? Image.memory(
+                base64Decode(imageData!),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
+            : path != null
+            ? Image.file(
+                File(path!),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
+            : _placeholder(),
+      ),
+    );
+    return heroTag == null ? image : Hero(tag: heroTag!, child: image);
+  }
+
   Widget _placeholder() => Container(
     color: const Color(0xFFFFEEEE),
     child: const Icon(Icons.inventory_2_outlined, color: _red, size: 23),

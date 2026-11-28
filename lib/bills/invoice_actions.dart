@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/sale_record.dart';
 import '../models/shop_profile.dart';
+import '../widgets/app_transitions.dart';
 import 'invoice_widget.dart';
 import 'whatsapp_bill.dart';
 
@@ -23,7 +24,7 @@ Future<void> showInvoicePreview({
   required String Function(String, String) t,
 }) {
   final key = GlobalKey();
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     builder: (dialogContext) {
       Future<Uint8List> capture() async {

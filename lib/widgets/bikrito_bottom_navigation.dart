@@ -142,29 +142,44 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
 
+  static const _duration = Duration(milliseconds: 220);
+
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
     borderRadius: BorderRadius.circular(14),
     child: SizedBox(
       height: 60,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 21, color: selected ? _navRed : _navMuted),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: selected ? _navRed : _navMuted,
-              fontSize: compact ? 8 : 10,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: selected ? 1 : 0),
+        duration: _duration,
+        curve: Curves.easeOutCubic,
+        builder: (context, value, _) => Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 21 + value * 2,
+              color: Color.lerp(_navMuted, _navRed, value),
             ),
-          ),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Color.lerp(_navMuted, _navRed, value),
+                fontSize: compact ? 8 : 10,
+                fontWeight: FontWeight.lerp(
+                  FontWeight.w500,
+                  FontWeight.w700,
+                  value,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );

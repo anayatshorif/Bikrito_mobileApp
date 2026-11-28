@@ -1,38 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-<<<<<<< HEAD
 import 'package:bikrito/main.dart';
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
 import 'package:bikrito/models/sale_record.dart';
 import 'package:bikrito/models/shop_product.dart';
 import 'package:bikrito/models/shop_profile.dart';
 import 'package:bikrito/screens/sales_screen.dart';
 
 SaleRecord _sale({
-<<<<<<< HEAD
   int id = 20,
   double total = 800,
   double discount = 100,
   String buyerName = 'Old buyer',
   String buyerPhone = '',
-=======
-  double total = 800,
-  double discount = 100,
-  String buyerName = 'Old buyer',
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   String paymentMethod = 'cash',
   String buyerAddress = '',
   double deliveryCharge = 0,
   double advancePaid = 0,
   double codDue = 0,
 }) => SaleRecord(
-<<<<<<< HEAD
   id: id,
-=======
-  id: 20,
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   items: const [
     SaleItem(productId: 1, name: 'Shirt', unitPrice: 450, quantity: 2),
   ],
@@ -42,10 +29,7 @@ SaleRecord _sale({
   paymentMethod: paymentMethod,
   createdAt: DateTime(2026, 11, 25),
   buyerName: buyerName,
-<<<<<<< HEAD
   buyerPhone: buyerPhone,
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   buyerAddress: buyerAddress,
   deliveryCharge: deliveryCharge,
   advancePaid: advancePaid,
@@ -53,7 +37,6 @@ SaleRecord _sale({
 );
 
 void main() {
-<<<<<<< HEAD
   testWidgets('home remaining metric opens remaining-payments page', (
     tester,
   ) async {
@@ -77,6 +60,7 @@ void main() {
           onOrders: () {},
           onShowRemaining: () => openedRemaining = true,
           onNavigate: (_) {},
+          onOpenProduct: (_) {},
         ),
       ),
     );
@@ -99,8 +83,6 @@ void main() {
     expect(openedRemaining, isTrue);
   });
 
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
   testWidgets(
     'sale editor updates the existing sale and keeps its saved price',
     (tester) async {
@@ -264,7 +246,6 @@ void main() {
     expect(updatedSale?.total, 1000);
     expect(updatedSale?.codDue, 900);
   });
-<<<<<<< HEAD
 
   testWidgets('remaining page lists unpaid sales and removes a settled sale', (
     tester,
@@ -386,6 +367,4 @@ void main() {
     expect(settledSale?.paymentMethod, 'cash');
     expect(find.text('No remaining payments'), findsOneWidget);
   });
-=======
->>>>>>> ed92df6e67002d14f1a17c348268d29cb7997ad2
 }

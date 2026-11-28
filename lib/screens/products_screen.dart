@@ -21,6 +21,7 @@ class ProductsScreen extends StatefulWidget {
     required this.onAdd,
     required this.onDelete,
     required this.onRefresh,
+    required this.onOpenProduct,
   });
 
   final List<ShopProduct> products;
@@ -30,6 +31,7 @@ class ProductsScreen extends StatefulWidget {
   final Future<void> Function() onAdd;
   final Future<void> Function(int productId) onDelete;
   final Future<List<ShopProduct>> Function() onRefresh;
+  final ValueChanged<ShopProduct> onOpenProduct;
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -130,57 +132,70 @@ class _ProductsScreenState extends State<ProductsScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final product = _products[index];
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+                return Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(17),
+                  child: InkWell(
+                    onTap: () => widget.onOpenProduct(product),
                     borderRadius: BorderRadius.circular(17),
-                    border: Border.all(color: const Color(0xFFECEAE7)),
-                  ),
-                  child: Row(
-                    children: [
-                      _ProductThumbnail(
-                        path: product.imagePath,
-                        imageData: product.imageData,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(17),
+                        border: Border.all(color: const Color(0xFFECEAE7)),
                       ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: _productsInk,
-                              ),
+                      child: Row(
+                        children: [
+                          _ProductThumbnail(
+                            path: product.imagePath,
+                            imageData: product.imageData,
+                            heroTag: product.id != null
+                                ? 'product-photo-${product.id}'
+                                : null,
+                          ),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: _productsInk,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  '৳${_productMoney(product.price)}',
+                                  style: const TextStyle(
+                                    color: _productsRed,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              '৳${_productMoney(product.price)}',
-                              style: const TextStyle(
-                                color: _productsRed,
-                                fontWeight: FontWeight.w800,
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'delete') _deleteProduct(product);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text(
+                                  t('Remove product', 'পণ্য সরান'),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'delete') _deleteProduct(product);
-                        },
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text(t('Remove product', 'পণ্য সরান')),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -200,9 +215,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
 }
 
 class _ProductThumbnail extends StatelessWidget {
-  const _ProductThumbnail({this.path, this.imageData});
+  const _ProductThumbnail({this.path, this.imageData, this.heroTag});
   final String? path;
   final String? imageData;
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +230,7 @@ class _ProductThumbnail extends StatelessWidget {
     } else {
       image = const Icon(Icons.inventory_2_outlined, color: _productsRed);
     }
-    return ClipRRect(
+    final thumbnail = ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         width: 58,
@@ -222,6 +238,9 @@ class _ProductThumbnail extends StatelessWidget {
         child: Container(color: const Color(0xFFFFEEEE), child: image),
       ),
     );
+    return heroTag == null
+        ? thumbnail
+        : Hero(tag: heroTag!, child: thumbnail);
   }
 }
 
